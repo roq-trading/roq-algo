@@ -6,10 +6,12 @@
 
 #include "roq/client/flags/settings.hpp"
 
-#include "simple/flags/flags.hpp"
-#include "simple/flags/test.hpp"
+#include "roq/algo/spreader/flags/flags.hpp"
+#include "roq/algo/spreader/flags/test.hpp"
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 struct Settings final : public roq::client::flags::Settings, public flags::Flags {
   explicit Settings(roq::args::Parser const &);
@@ -17,4 +19,6 @@ struct Settings final : public roq::client::flags::Settings, public flags::Flags
   flags::Test const test;  // note! flags/test.json uses "prefix"
 };
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

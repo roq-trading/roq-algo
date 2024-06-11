@@ -1,5 +1,5 @@
 {
-  "name": "simple/flags/Test",
+  "name": "roq/algo/spreader/flags/Test",
   "type": "flags",
   "prefix": "test_",
   "values": [

@@ -2,10 +2,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "tools/simple.hpp"
+#include "roq/algo/tools/simple.hpp"
 
-using namespace tools;
+using namespace roq;
+using namespace roq::algo;
+using namespace roq::algo::tools;
 
-TEST_CASE("add", "[simple]") {
+TEST_CASE("add", "[algo/spreader]") {
   CHECK(Simple::add(1, 2) == 3);
 }

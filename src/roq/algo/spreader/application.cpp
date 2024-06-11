@@ -1,24 +1,26 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#include "simple/application.hpp"
+#include "roq/algo/spreader/application.hpp"
 
 #include <cassert>
 #include <vector>
 
 #include "roq/client.hpp"
 
-#include "simple/settings.hpp"
+#include "roq/algo/spreader/settings.hpp"
 
 using namespace std::literals;
 using namespace std::chrono_literals;  // NOLINT
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 // === CONSTANTS ===
 
 namespace {
 auto const SNAPSHOT_FREQUENCY = 1s;
-auto const MATCHER = "simple"sv;  // note! filled when market is crossed
+auto const MATCHER = "algo/spreader"sv;  // note! filled when market is crossed
 auto const MARKET_DATA_LATENCY = 1ms;
 auto const ORDER_MANAGEMENT_LATENCY = 10ms;
 }  // namespace
@@ -60,4 +62,6 @@ void Application::trading(Settings const &settings, Config const &config, std::s
   roq::client::Trader{settings, config, params}.dispatch<value_type>(settings);
 }
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

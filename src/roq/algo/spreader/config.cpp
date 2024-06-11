@@ -1,8 +1,10 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#include "simple/config.hpp"
+#include "roq/algo/spreader/config.hpp"
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 Config::Config(Settings const &settings) : settings_{settings} {
 }
@@ -29,4 +31,6 @@ void Config::dispatch(Handler &handler) const {
   });
 }
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

@@ -9,11 +9,13 @@
 
 // note! the following are your implementations
 
-#include "simple/config.hpp"
-#include "simple/settings.hpp"
-#include "simple/strategy.hpp"
+#include "roq/algo/spreader/config.hpp"
+#include "roq/algo/spreader/settings.hpp"
+#include "roq/algo/spreader/strategy.hpp"
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 struct Application final : public roq::Service {
   using Service::Service;  // inherit constructors
@@ -28,4 +30,6 @@ struct Application final : public roq::Service {
   using value_type = Strategy;  // note!
 };
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

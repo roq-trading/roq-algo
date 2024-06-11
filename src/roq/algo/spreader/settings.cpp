@@ -1,10 +1,14 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#include "simple/settings.hpp"
+#include "roq/algo/spreader/settings.hpp"
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 Settings::Settings(roq::args::Parser const &args) : roq::client::flags::Settings{args}, flags::Flags{flags::Flags::create()}, test{flags::Test::create()} {
 }
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

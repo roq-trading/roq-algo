@@ -4,9 +4,11 @@
 
 #include "roq/client/config.hpp"
 
-#include "simple/settings.hpp"
+#include "roq/algo/spreader/settings.hpp"
 
-namespace simple {
+namespace roq {
+namespace algo {
+namespace spreader {
 
 struct Config final : public roq::client::Config {
   explicit Config(Settings const &);
@@ -21,4 +23,6 @@ struct Config final : public roq::client::Config {
   Settings const &settings_;
 };
 
-}  // namespace simple
+}  // namespace spreader
+}  // namespace algo
+}  // namespace roq

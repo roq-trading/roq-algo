@@ -2,9 +2,11 @@
 
 #include <benchmark/benchmark.h>
 
-#include "tools/simple.hpp"
+#include "roq/algo/tools/simple.hpp"
 
-using namespace tools;
+using namespace roq;
+using namespace roq::algo;
+using namespace roq::algo::tools;
 
 void BM_tools_Simple_add(benchmark::State &state) {
   for (auto _ : state) {

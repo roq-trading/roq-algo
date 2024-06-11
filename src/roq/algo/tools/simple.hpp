@@ -2,6 +2,8 @@
 
 #pragma once
 
+namespace roq {
+namespace algo {
 namespace tools {
 
 struct Simple final {
@@ -9,3 +11,5 @@ struct Simple final {
 };
 
 }  // namespace tools
+}  // namespace algo
+}  // namespace roq
