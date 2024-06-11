@@ -26,9 +26,11 @@ requirements:
     - roq-autogen
   host:
     - catch2
+    - fmt
     - libabseil
     - roq-client
     - roq-flags
+    - roq-oss-benchmark
 
 about:
   home: https://roq-trading.com
