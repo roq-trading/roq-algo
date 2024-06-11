@@ -1,0 +1,20 @@
+{
+  "name": "simple/flags/Test",
+  "type": "flags",
+  "prefix": "test_",
+  "values": [
+    {
+      "name": "update_freq",
+      "type": "std/milliseconds",
+      "validator": "roq/flags/validators/TimePeriod",
+      "default": "10ms",
+      "description": "demo prefix and validator"
+    },
+    {
+      "name": "some_list",
+      "type": "std/string",
+      "array": "std/vector",
+      "description": "something"
+    }
+  ]
+}
