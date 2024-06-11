@@ -1,4 +1,4 @@
-set(TARGET_NAME ${PROJECT_NAME}-simple)
+set(TARGET_NAME ${PROJECT_NAME}-spreader)
 
 add_subdirectory(flags)
 
