@@ -4,26 +4,19 @@ cmake_minimum_required(VERSION 3.12)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
+# config
+
+include(RoqConfig)
+
+# version (using git tag)
+
+include(GetGitRepoVersion)
+
+message("Using GIT_REPO_VERSION=${GIT_REPO_VERSION}")
+
 # project
 
-project(roq-algo)
-
-# conda
-
-if(DEFINED ENV{CONDA_PREFIX} AND NOT DEFINED ENV{CONDA_BUILD})
-  set(CMAKE_INSTALL_PREFIX $ENV{CONDA_PREFIX})
-  set(CMAKE_FIND_ROOT_PATH $ENV{CONDA_PREFIX})
-endif()
-
-# rpath
-
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-# c++
-
-if(NOT DEFINED CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 23)
-endif()
+project(roq-algo VERSION ${GIT_REPO_VERSION})
 
 # filesystem
 

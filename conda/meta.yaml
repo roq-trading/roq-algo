@@ -1,12 +1,19 @@
 package:
   name: roq-algo
-  version: 1.0
+  version: {{ GIT_DESCRIBE_TAG }}
 
 source:
   git_url: ..
 
 build:
   skip: true  # [not unix]
+  number: {{ ROQ_BUILD_NUMBER if ROQ_BUILD_NUMBER is defined else GIT_DESCRIBE_NUMBER }}
+  script_env:
+    - ROQ_BUILD_NUMBER
+    - ROQ_BUILD_TYPE
+    - CFLAGS=-O3
+    - CPPFLAGS=-O3  # [linux]
+    - CPPFLAGS=-O3 -D_LIBCPP_DISABLE_AVAILABILITY  # [osx]
 
 requirements:
   build:
@@ -21,7 +28,10 @@ requirements:
     - roq-flags
 
 about:
-  license: BSD-3-Clause
-  license_family: BSD
+  home: https://roq-trading.com
+  doc_url: https://roq-trading.com/docs
+  dev_url: https://github.com/roq-trading
+  license: Commercial
+  license_family: PROPRIETARY
   license_file: LICENSE
-  summary: Strategy (a template project)
+  summary: Roq Algo Tools
