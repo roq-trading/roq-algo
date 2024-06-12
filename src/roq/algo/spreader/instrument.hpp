@@ -11,21 +11,37 @@ namespace algo {
 namespace spreader {
 
 struct Instrument final {
-  Instrument(std::string_view const &exchange, std::string_view const &symbol);
+  Instrument(std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity);
+
+  bool ready() const { return ready_; }
 
   void clear();
 
-  void operator()(Event<ReferenceData> const &);
-  void operator()(Event<MarketStatus> const &);
-  void operator()(Event<MarketByPriceUpdate> const &);
+  bool operator()(Event<ReferenceData> const &);
+  bool operator()(Event<MarketStatus> const &);
+  bool operator()(Event<MarketByPriceUpdate> const &);
 
   void operator()(Event<OrderAck> const &);
   void operator()(Event<OrderUpdate> const &);
   void operator()(Event<TradeUpdate> const &);
   void operator()(Event<PositionUpdate> const &);
 
+  bool update_reference_data();
+  bool update_market_data();
+
  private:
+  Side const side_;
+  double const total_quantity_;
+  // reference data
+  double min_trade_vol_ = std::numeric_limits<double>::quiet_NaN();
+  double tick_size_ = std::numeric_limits<double>::quiet_NaN();
+  // market data
   std::unique_ptr<cache::MarketByPrice> market_by_price_;
+  double impact_price_ = std::numeric_limits<double>::quiet_NaN();
+  // status
+  bool reference_data_ready_ = {};
+  bool market_data_ready_ = {};
+  bool ready_ = {};
 };
 
 }  // namespace spreader

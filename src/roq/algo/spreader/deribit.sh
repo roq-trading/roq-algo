@@ -22,4 +22,6 @@ $PREFIX ./roq-algo-spreader \
   --exchange deribit \
   --symbols ETH-PERPETUAL,BTC-PERPETUAL \
   --params 2750,20 \
+  --quantity 20 \
+  --side buy \
   $@

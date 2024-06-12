@@ -35,7 +35,9 @@ struct Strategy final : public client::Handler {
   void operator()(Event<PositionUpdate> const &) override;
 
   template <typename T>
-  void dispatch(Event<T> const &);
+  bool dispatch(Event<T> const &);
+
+  void update();
 
  private:
   client::Dispatcher &dispatcher_;

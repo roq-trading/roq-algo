@@ -2,7 +2,12 @@
 
 #include "roq/algo/spreader/strategy.hpp"
 
+#include <magic_enum.hpp>
+
 #include "roq/logging.hpp"
+
+#include "roq/utils/common.hpp"
+#include "roq/utils/compare.hpp"
 
 using namespace std::literals;
 
@@ -13,6 +18,13 @@ namespace spreader {
 // === HELPERS ===
 
 namespace {
+auto get_side(auto &value) {
+  auto result = magic_enum::enum_cast<Side>(value, magic_enum::case_insensitive);
+  if (result.has_value())
+    return result.value();
+  log::fatal(R"(Unexpected side="{}")"sv, value);
+}
+
 template <typename R>
 auto create_instruments(auto &settings) {
   // validate
@@ -20,11 +32,25 @@ auto create_instruments(auto &settings) {
     log::fatal("Expected at least 2 symbols"sv);
   if (std::size(settings.params) != std::size(settings.symbols))
     log::fatal("Length of parameters should match length of symbols"sv);
+  if (std::isnan(settings.quantity))
+    log::fatal("Expected quantity"sv);
   // process
   using result_type = std::remove_cvref<R>::type;
   result_type result;
-  for (auto &symbol : settings.symbols)
-    result.try_emplace(symbol, settings.exchange, symbol);
+  auto side = get_side(settings.side);
+  for (size_t i = 0; i < std::size(settings.symbols); ++i) {
+    auto &symbol = settings.symbols[i];
+    auto side_2 = i ? utils::invert(side) : side;
+    auto quantity = [&]() {
+      if (i == 0)
+        return settings.quantity;
+      auto param = settings.params[i];
+      if (std::isnan(param) || utils::is_zero(param))
+        log::fatal("Parameter must be non-zero"sv);
+      return settings.quantity / param;
+    }();
+    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity);
+  }
   return result;
 }
 }  // namespace
@@ -45,8 +71,8 @@ void Strategy::operator()(Event<Connected> const &) {
 void Strategy::operator()(Event<Disconnected> const &) {
   log::warn("*** DISCONNECTED ***"sv);
   ready_ = false;
-  for (auto &item : instruments_)
-    item.second.clear();
+  for (auto &[_, instrument] : instruments_)
+    instrument.clear();
 }
 
 void Strategy::operator()(Event<DownloadBegin> const &event) {
@@ -65,15 +91,18 @@ void Strategy::operator()(Event<Ready> const &) {
 }
 
 void Strategy::operator()(Event<ReferenceData> const &event) {
-  dispatch(event);
+  if (dispatch(event))
+    update();
 }
 
 void Strategy::operator()(Event<MarketStatus> const &event) {
-  dispatch(event);
+  if (dispatch(event))
+    update();
 }
 
 void Strategy::operator()(Event<MarketByPriceUpdate> const &event) {
-  dispatch(event);
+  if (dispatch(event))
+    update();
 }
 
 void Strategy::operator()(Event<OrderAck> const &) {
@@ -89,13 +118,15 @@ void Strategy::operator()(Event<PositionUpdate> const &) {
 }
 
 template <typename T>
-void Strategy::dispatch(Event<T> const &event) {
+bool Strategy::dispatch(Event<T> const &event) {
   auto iter = instruments_.find(event.value.symbol);
-  if (iter != std::end(instruments_)) [[likely]] {
-    (*iter).second(event);
-  } else {
+  if (iter == std::end(instruments_)) [[unlikely]]
     log::fatal(R"(Unexpected: symbol="{}")"sv, event.value.symbol);
-  }
+  return (*iter).second(event);
+}
+
+void Strategy::update() {
+  log::info("UPDATE"sv);
 }
 
 }  // namespace spreader

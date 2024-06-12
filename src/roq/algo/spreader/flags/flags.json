@@ -29,6 +29,12 @@
       "description": "parameters (linear model)"
     },
     {
+      "name": "side",
+      "type": "std/string",
+      "required": true,
+      "description": "side"
+    },
+    {
       "name": "quantity",
       "type": "std/double",
       "required": true,
