@@ -32,6 +32,13 @@ auto create_instruments(auto &settings) {
     log::fatal("Expected at least 2 symbols"sv);
   if (std::size(settings.params) != std::size(settings.symbols))
     log::fatal("Length of parameters should match length of symbols"sv);
+  for (size_t i = 0; i < std::size(settings.params); ++i) {
+    auto &param = settings.params[i];
+    if (std::isnan(param))
+      log::fatal("Parameter can not be NaN"sv);
+    if (i && utils::is_zero(param))  // note! base (index 0) has the intercept / zero *is* allowed
+      log::fatal("Parameter must be non-zero"sv);
+  }
   if (std::isnan(settings.quantity))
     log::fatal("Expected quantity"sv);
   // process
@@ -44,12 +51,10 @@ auto create_instruments(auto &settings) {
     auto quantity = [&]() {
       if (i == 0)
         return settings.quantity;
-      auto param = settings.params[i];
-      if (std::isnan(param) || utils::is_zero(param))
-        log::fatal("Parameter must be non-zero"sv);
-      return settings.quantity / param;
+      return settings.quantity * settings.params[i];
     }();
-    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity);
+    auto weight = i ? -settings.params[i] : 1.0;
+    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity, weight);
   }
   return result;
 }
@@ -88,6 +93,7 @@ void Strategy::operator()(Event<DownloadEnd> const &event) {
 void Strategy::operator()(Event<Ready> const &) {
   log::info("*** READY ***"sv);
   ready_ = true;
+  // note! wait for next tick before doing anything
 }
 
 void Strategy::operator()(Event<ReferenceData> const &event) {
@@ -126,7 +132,10 @@ bool Strategy::dispatch(Event<T> const &event) {
 }
 
 void Strategy::update() {
-  log::info("UPDATE"sv);
+  double residual = 0.0;
+  for (auto &[_, instrument] : instruments_)
+    residual += instrument.value();
+  log::info("DEBUG residual={}"sv, residual);
 }
 
 }  // namespace spreader

@@ -11,7 +11,7 @@ namespace algo {
 namespace spreader {
 
 struct Instrument final {
-  Instrument(std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity);
+  Instrument(std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity, double weight);
 
   bool ready() const { return ready_; }
 
@@ -29,9 +29,14 @@ struct Instrument final {
   bool update_reference_data();
   bool update_market_data();
 
+  double value() const;
+
  private:
+  // config
+  std::string_view const symbol_;
   Side const side_;
   double const total_quantity_;
+  double const weight_;
   // reference data
   double min_trade_vol_ = std::numeric_limits<double>::quiet_NaN();
   double tick_size_ = std::numeric_limits<double>::quiet_NaN();
