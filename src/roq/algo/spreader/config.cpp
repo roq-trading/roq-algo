@@ -17,18 +17,16 @@ void Config::dispatch(Handler &handler) const {
   });
   // accounts
   handler(roq::client::Account{
-      .regex = settings_.accounts,
+      .regex = settings_.account,
   });
   // symbols
-  handler(roq::client::Symbol{
-      .regex = settings_.symbols,
-      .exchange = settings_.exchange,
-  });
-  // currencies
-  handler(roq::client::Symbol{
-      .regex = settings_.currencies,
-      .exchange = {},
-  });
+  for (auto &item : settings_.symbols) {
+    auto symbol = roq::client::Symbol{
+        .regex = item,
+        .exchange = settings_.exchange,
+    };
+    handler(symbol);
+  }
 }
 
 }  // namespace spreader

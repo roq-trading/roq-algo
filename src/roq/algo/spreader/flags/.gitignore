@@ -1,6 +1,4 @@
 !!! THIS FILE HAS BEEN AUTO-GENERATED !!!
 roq-algo-spreader-flags
 flags.hpp
-test.hpp
 flags.cpp
-test.cpp

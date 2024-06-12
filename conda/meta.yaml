@@ -31,6 +31,7 @@ requirements:
     - roq-client
     - roq-flags
     - roq-oss-benchmark
+    - roq-utils
 
 about:
   home: https://roq-trading.com
