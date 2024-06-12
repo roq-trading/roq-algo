@@ -10,7 +10,7 @@ namespace roq {
 namespace algo {
 namespace spreader {
 
-struct Config final : public roq::client::Config {
+struct Config final : public client::Config {
   explicit Config(Settings const &);
 
   Config(Config &&) = default;

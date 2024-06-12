@@ -35,6 +35,11 @@
       "description": "quantity (first symbol)"
     },
     {
+      "name": "strategy_id",
+      "type": "std/uint32",
+      "description": "strategy id"
+    },
+    {
       "name": "simulation",
       "type": "std/bool",
       "default": false,

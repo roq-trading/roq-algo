@@ -6,22 +6,24 @@ namespace roq {
 namespace algo {
 namespace spreader {
 
+// === IMPLEMENTATION ===
+
 Config::Config(Settings const &settings) : settings_{settings} {
 }
 
 void Config::dispatch(Handler &handler) const {
   // settings
-  handler(roq::client::Settings{
-      .order_cancel_policy = roq::OrderCancelPolicy::BY_ACCOUNT,
+  handler(client::Settings{
+      .order_cancel_policy = OrderCancelPolicy::BY_ACCOUNT,
       .order_management = {},
   });
   // accounts
-  handler(roq::client::Account{
+  handler(client::Account{
       .regex = settings_.account,
   });
   // symbols
   for (auto &item : settings_.symbols) {
-    auto symbol = roq::client::Symbol{
+    auto symbol = client::Symbol{
         .regex = item,
         .exchange = settings_.exchange,
     };

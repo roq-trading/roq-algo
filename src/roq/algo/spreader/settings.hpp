@@ -12,8 +12,8 @@ namespace roq {
 namespace algo {
 namespace spreader {
 
-struct Settings final : public roq::client::flags::Settings, public flags::Flags {
-  explicit Settings(roq::args::Parser const &);
+struct Settings final : public client::flags::Settings, public flags::Flags {
+  explicit Settings(args::Parser const &);
 };
 
 }  // namespace spreader

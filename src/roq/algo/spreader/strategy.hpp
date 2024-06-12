@@ -4,37 +4,43 @@
 
 #include "roq/client.hpp"
 
+#include "roq/utils/container.hpp"
+
+#include "roq/algo/spreader/instrument.hpp"
 #include "roq/algo/spreader/settings.hpp"
 
 namespace roq {
 namespace algo {
 namespace spreader {
 
-struct Strategy final : public roq::client::Handler {
-  Strategy(roq::client::Dispatcher &, Settings const &);
+struct Strategy final : public client::Handler {
+  Strategy(client::Dispatcher &, Settings const &);
 
   Strategy(Strategy &&) = default;
   Strategy(Strategy const &) = delete;
 
  protected:
-  void operator()(roq::Event<roq::Timer> const &) override;
-  void operator()(roq::Event<roq::Connected> const &) override;
-  void operator()(roq::Event<roq::Disconnected> const &) override;
-  void operator()(roq::Event<roq::DownloadBegin> const &) override;
-  void operator()(roq::Event<roq::DownloadEnd> const &) override;
-  void operator()(roq::Event<roq::GatewayStatus> const &) override;
-  void operator()(roq::Event<roq::ReferenceData> const &) override;
-  void operator()(roq::Event<roq::MarketStatus> const &) override;
-  void operator()(roq::Event<roq::MarketByPriceUpdate> const &) override;
-  void operator()(roq::Event<roq::OrderAck> const &) override;
-  void operator()(roq::Event<roq::OrderUpdate> const &) override;
-  void operator()(roq::Event<roq::TradeUpdate> const &) override;
-  void operator()(roq::Event<roq::PositionUpdate> const &) override;
-  void operator()(roq::Event<roq::FundsUpdate> const &) override;
+  void operator()(Event<Timer> const &) override;
+  void operator()(Event<Connected> const &) override;
+  void operator()(Event<Disconnected> const &) override;
+  void operator()(Event<DownloadBegin> const &) override;
+  void operator()(Event<DownloadEnd> const &) override;
+  void operator()(Event<Ready> const &) override;
+  void operator()(Event<ReferenceData> const &) override;
+  void operator()(Event<MarketStatus> const &) override;
+  void operator()(Event<MarketByPriceUpdate> const &) override;
+  void operator()(Event<OrderAck> const &) override;
+  void operator()(Event<OrderUpdate> const &) override;
+  void operator()(Event<TradeUpdate> const &) override;
+  void operator()(Event<PositionUpdate> const &) override;
+
+  template <typename T>
+  void dispatch(Event<T> const &);
 
  private:
-  roq::client::Dispatcher &dispatcher_;
-  // demo how to use settings (flags)
+  client::Dispatcher &dispatcher_;
+  bool ready_ = {};
+  roq::utils::unordered_map<std::string, Instrument> instruments_;
 };
 
 }  // namespace spreader

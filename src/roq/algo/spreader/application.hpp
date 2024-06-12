@@ -17,11 +17,11 @@ namespace roq {
 namespace algo {
 namespace spreader {
 
-struct Application final : public roq::Service {
+struct Application final : public Service {
   using Service::Service;  // inherit constructors
 
  protected:
-  int main(roq::args::Parser const &) override;
+  int main(args::Parser const &) override;
 
   void simulation(Settings const &, Config const &, std::span<std::string_view const> const &params);
   void trading(Settings const &, Config const &, std::span<std::string_view const> const &params);

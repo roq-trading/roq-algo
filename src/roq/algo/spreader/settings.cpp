@@ -6,7 +6,9 @@ namespace roq {
 namespace algo {
 namespace spreader {
 
-Settings::Settings(roq::args::Parser const &args) : roq::client::flags::Settings{args}, flags::Flags{flags::Flags::create()} {
+// === IMPLEMENTATION ===
+
+Settings::Settings(args::Parser const &args) : client::flags::Settings{args}, flags::Flags{flags::Flags::create()} {
 }
 
 }  // namespace spreader
