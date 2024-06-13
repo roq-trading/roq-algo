@@ -8,6 +8,7 @@
 
 #include "roq/algo/spreader/instrument.hpp"
 #include "roq/algo/spreader/settings.hpp"
+#include "roq/algo/spreader/shared.hpp"
 
 namespace roq {
 namespace algo {
@@ -39,8 +40,11 @@ struct Strategy final : public client::Handler {
 
   void update();
 
+  void refresh();
+
  private:
   client::Dispatcher &dispatcher_;
+  Shared shared_;
   bool ready_ = {};
   roq::utils::unordered_map<std::string, Instrument> instruments_;
 };

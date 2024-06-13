@@ -8,6 +8,7 @@
 
 #include "roq/utils/common.hpp"
 #include "roq/utils/compare.hpp"
+#include "roq/utils/update.hpp"
 
 using namespace std::literals;
 
@@ -18,16 +19,7 @@ namespace spreader {
 // === HELPERS ===
 
 namespace {
-auto get_side(auto &value) {
-  auto result = magic_enum::enum_cast<Side>(value, magic_enum::case_insensitive);
-  if (result.has_value())
-    return result.value();
-  log::fatal(R"(Unexpected side="{}")"sv, value);
-}
-
-template <typename R>
-auto create_instruments(auto &settings) {
-  // validate
+void validate_settings(auto &settings) {
   if (std::size(settings.symbols) < 2)
     log::fatal("Expected at least 2 symbols"sv);
   if (std::size(settings.params) != std::size(settings.symbols))
@@ -41,10 +33,21 @@ auto create_instruments(auto &settings) {
   }
   if (std::isnan(settings.quantity))
     log::fatal("Expected quantity"sv);
-  // process
+}
+
+auto parse_side(auto &value) {
+  auto result = magic_enum::enum_cast<Side>(value, magic_enum::case_insensitive);
+  if (result.has_value())
+    return result.value();
+  log::fatal(R"(Unexpected side="{}")"sv, value);
+}
+
+template <typename R>
+auto create_instruments(auto &settings, auto &shared) {
+  validate_settings(settings);
   using result_type = std::remove_cvref<R>::type;
   result_type result;
-  auto side = get_side(settings.side);
+  auto side = parse_side(settings.side);
   for (size_t i = 0; i < std::size(settings.symbols); ++i) {
     auto &symbol = settings.symbols[i];
     auto side_2 = i ? utils::invert(side) : side;
@@ -54,7 +57,7 @@ auto create_instruments(auto &settings) {
       return settings.quantity * settings.params[i];
     }();
     auto weight = i ? -settings.params[i] : 1.0;
-    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity, weight, settings.params[0]);
+    result.try_emplace(symbol, shared, settings.exchange, symbol, side_2, quantity, weight, settings.params[0]);
   }
   return result;
 }
@@ -63,7 +66,7 @@ auto create_instruments(auto &settings) {
 // === IMPLEMENTATION ===
 
 Strategy::Strategy(client::Dispatcher &dispatcher, Settings const &settings)
-    : dispatcher_{dispatcher}, instruments_{create_instruments<decltype(instruments_)>(settings)} {
+    : dispatcher_{dispatcher}, instruments_{create_instruments<decltype(instruments_)>(settings, shared_)} {
 }
 
 void Strategy::operator()(Event<Timer> const &) {
@@ -78,6 +81,7 @@ void Strategy::operator()(Event<Disconnected> const &) {
   ready_ = false;
   for (auto &[_, instrument] : instruments_)
     instrument.clear();
+  shared_.ready = false;
 }
 
 void Strategy::operator()(Event<DownloadBegin> const &event) {
@@ -88,12 +92,15 @@ void Strategy::operator()(Event<DownloadBegin> const &event) {
 void Strategy::operator()(Event<DownloadEnd> const &event) {
   auto &[message_info, download_end] = event;
   log::warn(R"(*** DOWNLOAD HAS COMPLETED *** (account="{}", max_order_id={}))"sv, download_end.account, download_end.max_order_id);
+  if (utils::update_max(shared_.max_order_id, download_end.max_order_id))
+    log::info("max_order_id={}"sv, shared_.max_order_id);
 }
 
 void Strategy::operator()(Event<Ready> const &) {
   log::info("*** READY ***"sv);
+  assert(!ready_);
   ready_ = true;
-  // note! wait for next tick before doing anything
+  update();
 }
 
 void Strategy::operator()(Event<ReferenceData> const &event) {
@@ -108,7 +115,7 @@ void Strategy::operator()(Event<MarketStatus> const &event) {
 
 void Strategy::operator()(Event<MarketByPriceUpdate> const &event) {
   if (dispatch(event))
-    update();
+    refresh();
 }
 
 void Strategy::operator()(Event<OrderAck> const &) {
@@ -132,6 +139,20 @@ bool Strategy::dispatch(Event<T> const &event) {
 }
 
 void Strategy::update() {
+  if (!ready_)  // downloading?
+    return;
+  auto ready = true;
+  for (auto &[_, instrument] : instruments_)
+    ready &= instrument.ready();
+  if (utils::update(shared_.ready, ready)) {
+    log::info("DEBUG ready={}"sv, shared_.ready);
+    // note! wait for next tick before doing anything
+  }
+}
+
+void Strategy::refresh() {
+  if (!shared_.ready)
+    return;
   double residual = 0.0;
   for (auto &[_, instrument] : instruments_)
     residual += instrument.value();
