@@ -66,7 +66,7 @@ auto create_instruments(auto &settings, auto &shared) {
 // === IMPLEMENTATION ===
 
 Strategy::Strategy(client::Dispatcher &dispatcher, Settings const &settings)
-    : dispatcher_{dispatcher}, instruments_{create_instruments<decltype(instruments_)>(settings, shared_)} {
+    : shared_{dispatcher, settings}, instruments_{create_instruments<decltype(instruments_)>(settings, shared_)} {
 }
 
 void Strategy::operator()(Event<Timer> const &) {
@@ -118,10 +118,12 @@ void Strategy::operator()(Event<MarketByPriceUpdate> const &event) {
     refresh();
 }
 
-void Strategy::operator()(Event<OrderAck> const &) {
+void Strategy::operator()(Event<OrderAck> const &event) {
+  dispatch_2(event);
 }
 
-void Strategy::operator()(Event<OrderUpdate> const &) {
+void Strategy::operator()(Event<OrderUpdate> const &event) {
+  dispatch_2(event);
 }
 
 void Strategy::operator()(Event<TradeUpdate> const &) {
@@ -129,6 +131,8 @@ void Strategy::operator()(Event<TradeUpdate> const &) {
 
 void Strategy::operator()(Event<PositionUpdate> const &) {
 }
+
+// market data
 
 template <typename T>
 bool Strategy::dispatch(Event<T> const &event) {
@@ -161,6 +165,16 @@ void Strategy::refresh() {
   log::info("DEBUG residual={}"sv, residual);
   for (auto &[_, instrument] : instruments_)
     instrument.update(residual);
+}
+
+// order management
+
+template <typename T>
+void Strategy::dispatch_2(Event<T> const &event) {
+  auto iter = instruments_.find(event.value.symbol);
+  if (iter == std::end(instruments_)) [[unlikely]]
+    log::fatal(R"(Unexpected: symbol="{}")"sv, event.value.symbol);
+  (*iter).second(event);
 }
 
 }  // namespace spreader

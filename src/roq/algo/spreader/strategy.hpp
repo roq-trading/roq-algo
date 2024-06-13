@@ -42,8 +42,10 @@ struct Strategy final : public client::Handler {
 
   void refresh();
 
+  template <typename T>
+  void dispatch_2(Event<T> const &);
+
  private:
-  client::Dispatcher &dispatcher_;
   Shared shared_;
   bool ready_ = {};
   roq::utils::unordered_map<std::string, Instrument> instruments_;

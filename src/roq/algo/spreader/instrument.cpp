@@ -105,7 +105,31 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
   return true;
 }
 
-void Instrument::operator()(Event<OrderAck> const &) {
+void Instrument::operator()(Event<OrderAck> const &event) {
+  log::info("DEBUG event={}"sv, event);
+  auto &order_ack = event.value;
+  // note! fail hard so we can resolve issues
+  if (utils::has_request_failed(order_ack.request_status))
+    log::fatal("order_ack={}"sv, order_ack);
+  if (utils::has_request_completed(order_ack.request_status)) {
+    switch (order_ack.request_type) {
+      using enum RequestType;
+      case UNDEFINED:
+        assert(false);
+        break;
+      case CREATE_ORDER:
+        assert(state_ == State::CREATING);
+        (*this)(State::READY);
+        break;
+      case MODIFY_ORDER:
+        assert(state_ == State::MODIFYING);
+        (*this)(State::READY);
+        break;
+      case CANCEL_ORDER:
+        assert(false);
+        break;
+    }
+  }
 }
 
 void Instrument::operator()(Event<OrderUpdate> const &) {
@@ -156,7 +180,39 @@ void Instrument::update(double residual) {
 }
 
 void Instrument::refresh() {
-  // TODO update orders
+  assert(!std::isnan(target_price_));
+  if (order_id_) {
+  } else {
+    assert(state_ == State::UNDEFINED);
+    order_id_ = shared_.get_next_order_id();
+    auto create_order = CreateOrder{
+        .account = shared_.settings.account,
+        .order_id = order_id_,
+        .exchange = shared_.settings.exchange,
+        .symbol = symbol_,
+        .side = side_,
+        .position_effect = {},
+        .margin_mode = {},
+        .max_show_quantity = std::numeric_limits<double>::quiet_NaN(),
+        .order_type = OrderType::LIMIT,
+        .time_in_force = TimeInForce::GTC,
+        .execution_instructions = {},
+        .request_template = {},
+        .quantity = total_quantity_,
+        .price = target_price_,
+        .stop_price = std::numeric_limits<double>::quiet_NaN(),
+        .routing_id = {},
+        .strategy_id = shared_.settings.strategy_id,
+    };
+    log::info("[{}:{}] create_order={}"sv, symbol_, side_, create_order);
+    shared_.dispatcher.send(create_order, 0u);
+    assert(state_ == State::CREATING);
+  }
+}
+
+void Instrument::operator()(State state) {
+  if (utils::update(state_, state))
+    log::info("[{}:{}] state={}"sv, symbol_, side_, magic_enum::enum_name(state_));
 }
 
 void Instrument::DEBUG_print() {

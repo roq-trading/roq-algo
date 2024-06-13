@@ -20,8 +20,8 @@ $PREFIX ./roq-algo-spreader \
   --name trader \
   --account A1 \
   --exchange deribit \
-  --symbols ETH-PERPETUAL,BTC-PERPETUAL \
-  --params 100,0.05 \
-  --quantity 20 \
+  --symbols BTC-21JUN24,BTC-PERPETUAL \
+  --params 0,1 \
+  --quantity 5 \
   --side buy \
   $@

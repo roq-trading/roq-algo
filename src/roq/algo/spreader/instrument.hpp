@@ -40,6 +40,16 @@ struct Instrument final {
 
   void refresh();
 
+ protected:
+  enum class State {
+    UNDEFINED,
+    CREATING,
+    MODIFYING,
+    READY,
+  };
+
+  void operator()(State);
+
   void DEBUG_print();
 
  private:
@@ -62,6 +72,9 @@ struct Instrument final {
   bool reference_data_ready_ = {};
   bool market_data_ready_ = {};
   bool ready_ = {};
+  // EXPERIMENTAL
+  uint64_t order_id_ = {};
+  State state_ = {};
 };
 
 }  // namespace spreader
