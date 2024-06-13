@@ -6,6 +6,8 @@
 
 #include "roq/utils/update.hpp"
 
+#include "roq/market/utils.hpp"
+
 #include "roq/market/mbp/factory.hpp"
 
 using namespace std::literals;
@@ -26,8 +28,9 @@ auto create_market_by_price(auto &exchange, auto &symbol) {
 
 // note! rounding happens later (wait for reference data / min-trade-vol)
 
-Instrument::Instrument(std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity, double weight)
-    : symbol_{symbol}, side_{side}, total_quantity_{total_quantity}, weight_{weight}, market_by_price_{create_market_by_price(exchange, symbol)} {
+Instrument::Instrument(std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity, double weight, double target_spread)
+    : symbol_{symbol}, side_{side}, total_quantity_{total_quantity}, weight_{weight}, target_spread_{target_spread},
+      market_by_price_{create_market_by_price(exchange, symbol)} {
   assert(side_ != Side{});
   assert(!std::isnan(total_quantity_));
 }
@@ -37,6 +40,7 @@ void Instrument::clear() {
   // reference data
   //   note! keeping reference data (shouldn't change)
   // market data
+  top_of_book_ = {};
   impact_price_ = std::numeric_limits<double>::quiet_NaN();
   market_data_ready_ = false;
   // all
@@ -69,6 +73,7 @@ bool Instrument::operator()(Event<MarketStatus> const &event) {
 bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
   log::info<3>("event={}"sv, event);
   (*market_by_price_)(event.value);
+  (*market_by_price_).extract({&top_of_book_, 1});
   auto impact_price = [&]() {
     auto layer = (*market_by_price_).compute_impact_price(total_quantity_);
     switch (side_) {
@@ -139,6 +144,20 @@ bool Instrument::update_market_data() {
 
 double Instrument::value() const {
   return weight_ * impact_price_;
+}
+
+void Instrument::update(double residual) {
+  auto target_price = impact_price_ + (target_spread_ - residual) / weight_;
+  auto target_price_2 = market::round_conservative(side_, target_price, tick_size_);
+  log::info(
+      "DEBUG [{}] side={}, target_price={}({}/{}) (top_of_book={}/{})"sv,
+      symbol_,
+      side_,
+      target_price_2,
+      target_price,
+      tick_size_,
+      top_of_book_.bid_price,
+      top_of_book_.ask_price);
 }
 
 }  // namespace spreader

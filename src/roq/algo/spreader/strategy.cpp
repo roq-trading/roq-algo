@@ -54,7 +54,7 @@ auto create_instruments(auto &settings) {
       return settings.quantity * settings.params[i];
     }();
     auto weight = i ? -settings.params[i] : 1.0;
-    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity, weight);
+    result.try_emplace(symbol, settings.exchange, symbol, side_2, quantity, weight, settings.params[0]);
   }
   return result;
 }
@@ -135,7 +135,11 @@ void Strategy::update() {
   double residual = 0.0;
   for (auto &[_, instrument] : instruments_)
     residual += instrument.value();
+  if (std::isnan(residual))
+    return;
   log::info("DEBUG residual={}"sv, residual);
+  for (auto &[_, instrument] : instruments_)
+    instrument.update(residual);
 }
 
 }  // namespace spreader
