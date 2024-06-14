@@ -35,4 +35,4 @@ Iceberg style for larger quantities?
 
 How to manage various error conditions?
 
-How to avoid spoofing (will result in working orders updating too often, we need some way to slowly update working orders when the price is improving)
+How to avoid spoofing? Will result in working orders updating too often, we need some way to slowly update working orders when the price is improving. However, we want to update quickly when the price is worsening
