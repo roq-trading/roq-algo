@@ -18,14 +18,16 @@ An "impact price" is the worst price we want to accept if we are to aggress rest
 
 There are controls to manage risk-aversion when computing this impact price, e.g. quantity multiplier and minimum number of orders on the exchange
 
-From the impact price of (N-1) instruments, and the target spread, we can work out the price where we want to place a limit order for any other instrument
+From the impact price of (N-1) instruments, and the target spread, we can work out the target price where we want to place a limit order for any other instrument
+
+Due to tick-size, the target price will be rounded away from best to at least achieve the target spread
 
 If a working order is filled, we must proportionally aggress the other (N-1) instruments
 
 
 ## TODO
 
-Risk assumptions may be required to manage the "residual" risk due to the minimum trading size for each instrument
+Risk assumptions are required to manage the "residual" risk due to the minimum trading size for each instrument
 
 Hung orders (when aggressing) -- stop loss?
 
