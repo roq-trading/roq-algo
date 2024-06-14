@@ -20,9 +20,9 @@ There are controls to manage risk-aversion when computing this impact price, e.g
 
 From the impact price of (N-1) instruments, and the target spread, we can work out the target price where we want to place a limit order for any other instrument
 
-Due to model precision and the instrument's tick-size, the target price must be rounded away from best to at least achieve the target spread
+Due to model precision and the instrument's tick size, the target price must be rounded away from best to at least achieve the target spread
 
-If a working order is filled, we must proportionally aggress the other (N-1) instruments
+If a working order is (partially) filled, we must proportionally aggress the other (N-1) instruments
 
 
 ## TODO
