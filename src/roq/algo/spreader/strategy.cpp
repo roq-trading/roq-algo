@@ -57,7 +57,7 @@ auto create_instruments(auto &settings, auto &shared) {
       return settings.quantity * settings.params[i];
     }();
     auto weight = i ? -settings.params[i] : 1.0;
-    result.try_emplace(symbol, shared, settings.exchange, symbol, side_2, quantity, weight, settings.params[0]);
+    result.try_emplace(symbol, shared, settings.exchange, symbol, side_2, quantity, weight);
   }
   return result;
 }
@@ -142,6 +142,7 @@ bool Strategy::dispatch(Event<T> const &event) {
   return (*iter).second(event);
 }
 
+// state change
 void Strategy::update() {
   if (!ready_)  // downloading?
     return;
@@ -154,6 +155,7 @@ void Strategy::update() {
   }
 }
 
+// market data change
 void Strategy::refresh() {
   if (!shared_.ready)
     return;
