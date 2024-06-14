@@ -19,6 +19,8 @@ struct Instrument final {
 
   void clear();
 
+  void operator()(Event<Timer> const &);
+
   bool operator()(Event<ReferenceData> const &);
   bool operator()(Event<MarketStatus> const &);
   bool operator()(Event<MarketByPriceUpdate> const &);
@@ -37,7 +39,7 @@ struct Instrument final {
 
   void update(double residual);
 
-  void refresh();
+  void refresh(std::chrono::nanoseconds now);
 
  protected:
   enum class State {
@@ -75,6 +77,7 @@ struct Instrument final {
   State state_ = {};
   double request_price_ = std::numeric_limits<double>::quiet_NaN();
   double order_price_ = std::numeric_limits<double>::quiet_NaN();
+  std::chrono::nanoseconds next_refresh_ = {};
 };
 
 }  // namespace spreader

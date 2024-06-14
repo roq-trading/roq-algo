@@ -54,6 +54,13 @@ void Instrument::clear() {
   ready_ = false;
 }
 
+void Instrument::operator()(Event<Timer> const &event) {
+  auto now = event.value.now;
+  if (next_refresh_.count() == 0 || now < next_refresh_)
+    return;
+  refresh(now);
+}
+
 bool Instrument::operator()(Event<ReferenceData> const &event) {
   (*market_by_price_)(event.value);
   auto &reference_data = event.value;
@@ -103,7 +110,20 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
   }();
   if (!updated)
     return false;
-  log::info("[{}:{}] impact_price={}"sv, symbol_, side_, impact_price_);
+  auto best_price = [&]() {
+    switch (side_) {
+      using enum Side;
+      case UNDEFINED:
+        assert(false);
+        break;
+      case BUY:
+        return top_of_book_.ask_price;
+      case SELL:
+        return top_of_book_.bid_price;
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+  }();
+  log::info("[{}:{}] impact_price={} (best_price={})"sv, symbol_, side_, impact_price_, best_price);
   update_market_data();
   return true;
 }
@@ -137,7 +157,8 @@ void Instrument::operator()(Event<OrderAck> const &event) {
   request_price_ = std::numeric_limits<double>::quiet_NaN();
   if (utils::update(order_price_, order_ack.price))
     log::info("[{}:{}] order_price={} (version={})"sv, symbol_, side_, order_price_, order_ack.version);
-  refresh();
+  auto now = clock::get_system();
+  refresh(now);
 }
 
 void Instrument::operator()(Event<OrderUpdate> const &) {
@@ -191,12 +212,13 @@ void Instrument::update(double residual) {
   if (utils::update(target_price_, target_price)) {
     log::info("[{}:{}] target_price={}"sv, symbol_, side_, target_price_);
     DEBUG_print();
-    refresh();
+    auto now = clock::get_system();
+    refresh(now);
   }
 }
 
 // target price change
-void Instrument::refresh() {
+void Instrument::refresh(std::chrono::nanoseconds now) {
   assert(!std::isnan(target_price_));
   if (state_ != State::READY)
     return;
@@ -223,13 +245,35 @@ void Instrument::refresh() {
         .routing_id = {},
         .strategy_id = shared_.settings.strategy_id,
     };
-    log::info("[{}:{}] create_order={}"sv, symbol_, side_, create_order);
+    log::info("[{}:{}] *** CREATE *** create_order={}"sv, symbol_, side_, create_order);
     shared_.dispatcher.send(create_order, 0u);
     state_ = State::CREATING;
   } else {
-    if (utils::compare(order_price_, target_price_) == 0) {
-      log::info("SAME order_price={}, target_price={}"sv, order_price_, target_price_);
+    auto result = utils::compare(order_price_, target_price_);
+    if (result == 0) {
+      log::info("[{}:{}] *** UNCHANGED *** (order_price={}, target_price={})"sv, symbol_, side_, order_price_, target_price_);
       return;
+    }
+    auto can_wait = [&]() {
+      switch (side_) {
+        using enum Side;
+        case UNDEFINED:
+          assert(false);
+          break;
+        case BUY:
+          return result < 0;
+        case SELL:
+          return result > 0;
+      }
+      return false;
+    }();
+    if (can_wait) {
+      if (next_refresh_.count() == 0)
+        next_refresh_ = now + shared_.settings.delay;
+      if (now < next_refresh_) {
+        log::info("[{}:{}] *** WAIT *** (order_price={}, target_price={})"sv, symbol_, side_, order_price_, target_price_);
+        return;
+      }
     }
     auto modify_order = ModifyOrder{
         .account = shared_.settings.account,
@@ -241,9 +285,10 @@ void Instrument::refresh() {
         .version = {},
         .conditional_on_version = {},
     };
-    log::info("[{}:{}] modify_order={}"sv, symbol_, side_, modify_order);
+    log::info("[{}:{}] *** MODIFY *** modify_order={}"sv, symbol_, side_, modify_order);
     shared_.dispatcher.send(modify_order, 0u);
     state_ = State::MODIFYING;
+    next_refresh_ = {};
   }
   request_price_ = target_price_;
 }

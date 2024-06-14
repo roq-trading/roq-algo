@@ -69,7 +69,9 @@ Strategy::Strategy(client::Dispatcher &dispatcher, Settings const &settings)
     : shared_{dispatcher, settings}, instruments_{create_instruments<decltype(instruments_)>(settings, shared_)} {
 }
 
-void Strategy::operator()(Event<Timer> const &) {
+void Strategy::operator()(Event<Timer> const &event) {
+  for (auto &[_, instrument] : instruments_)
+    instrument(event);
 }
 
 void Strategy::operator()(Event<Connected> const &) {
@@ -114,8 +116,10 @@ void Strategy::operator()(Event<MarketStatus> const &event) {
 }
 
 void Strategy::operator()(Event<MarketByPriceUpdate> const &event) {
-  if (dispatch(event))
+  if (dispatch(event)) {
+    update();  // XXX FIXME
     refresh();
+  }
 }
 
 void Strategy::operator()(Event<OrderAck> const &event) {

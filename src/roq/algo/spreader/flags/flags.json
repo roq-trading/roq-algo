@@ -51,6 +51,11 @@
       "description": "threshold number of orders"
     },
     {
+      "name": "delay",
+      "type": "std/nanoseconds",
+      "description": "period to wait"
+    },
+    {
       "name": "strategy_id",
       "type": "std/uint32",
       "description": "strategy id"
