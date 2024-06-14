@@ -19,6 +19,11 @@ namespace spreader {
 // === HELPERS ===
 
 namespace {
+auto compute_threshold_quantity(auto &settings, auto total_quantity) {
+  auto multiplier = std::isnan(settings.threshold_quantity_multiplier) ? 1.0 : settings.threshold_quantity_multiplier;
+  return total_quantity * multiplier;
+}
+
 auto create_market_by_price(auto &exchange, auto &symbol) {
   return market::mbp::Factory::create(exchange, symbol);
 }
@@ -28,9 +33,10 @@ auto create_market_by_price(auto &exchange, auto &symbol) {
 
 Instrument::Instrument(Shared &shared, std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity, double weight)
     : shared_{shared}, symbol_{symbol}, side_{side}, total_quantity_{total_quantity}, weight_{weight},
-      market_by_price_{create_market_by_price(exchange, symbol)} {
+      threshold_quantity_{compute_threshold_quantity(shared_.settings, total_quantity_)}, market_by_price_{create_market_by_price(exchange, symbol)} {
   assert(side_ != Side{});
-  assert(!std::isnan(total_quantity_));
+  assert(utils::compare(total_quantity_, 0.0) > 0);
+  assert(utils::compare(threshold_quantity_, 0.0) > 0);
 }
 
 void Instrument::clear() {
@@ -74,7 +80,7 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
   (*market_by_price_)(event.value);
   (*market_by_price_).extract({&top_of_book_, 1});
   auto impact_price = [&]() {
-    auto layer = (*market_by_price_).compute_impact_price(total_quantity_);
+    auto layer = (*market_by_price_).compute_impact_price(threshold_quantity_, shared_.settings.threshold_number_of_orders);
     switch (side_) {
       using enum Side;
       case UNDEFINED:
@@ -85,7 +91,7 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
       case SELL:
         return layer.bid_price;
     }
-    return std::numeric_limits<double>::quiet_NaN();
+    return std::numeric_limits<double>::quiet_NaN();  // note! we ensure the linear model evaluates to NaN when this price is "unavailable"
   }();
   auto updated = [&]() {
     if (std::isnan(impact_price) && !std::isnan(impact_price_)) {

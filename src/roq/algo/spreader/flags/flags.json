@@ -41,6 +41,16 @@
       "description": "quantity (first symbol)"
     },
     {
+      "name": "threshold_quantity_multiplier",
+      "type": "std/double",
+      "description": "threshold multiplier (threshold_quantity[i] = weight[i] * quantity * threshold_multiplier)"
+    },
+    {
+      "name": "threshold_number_of_orders",
+      "type": "std/uint16",
+      "description": "threshold number of orders"
+    },
+    {
       "name": "strategy_id",
       "type": "std/uint32",
       "description": "strategy id"

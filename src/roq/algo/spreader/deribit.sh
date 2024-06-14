@@ -23,5 +23,7 @@ $PREFIX ./roq-algo-spreader \
   --symbols BTC-21JUN24,BTC-PERPETUAL \
   --params 0,1 \
   --quantity 5 \
+  --threshold_quantity_multiplier 2 \
+  --threshold_number_of_orders 3 \
   --side buy \
   $@

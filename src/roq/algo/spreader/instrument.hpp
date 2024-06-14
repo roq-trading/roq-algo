@@ -57,6 +57,7 @@ struct Instrument final {
   Side const side_;
   double const total_quantity_;
   double const weight_;
+  double const threshold_quantity_;
   // reference data
   double min_trade_vol_ = std::numeric_limits<double>::quiet_NaN();
   double tick_size_ = std::numeric_limits<double>::quiet_NaN();
