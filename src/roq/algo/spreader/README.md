@@ -34,3 +34,5 @@ Hung orders (when aggressing) -- stop loss?
 Iceberg style for larger quantities?
 
 How to manage various error conditions?
+
+How to avoid spoofing (will result in working orders updating too often, we need some way to slowly update working orders when the price is improving)
