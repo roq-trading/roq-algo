@@ -50,6 +50,9 @@ struct Instrument final {
 
   void operator()(State);
 
+  void create_order();
+  void modify_order();
+
   void DEBUG_print();
 
  private:
