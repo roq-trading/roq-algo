@@ -128,6 +128,8 @@ void Strategy::operator()(Event<OrderAck> const &event) {
 
 void Strategy::operator()(Event<OrderUpdate> const &event) {
   dispatch_2(event);
+  auto residual = compute_implied_from_working_orders();
+  log::info("DEBUG residual_from_order_price={}"sv, residual);
 }
 
 void Strategy::operator()(Event<TradeUpdate> const &) {
@@ -146,7 +148,7 @@ bool Strategy::dispatch(Event<T> const &event) {
   return (*iter).second(event);
 }
 
-// state change
+// state has changed
 void Strategy::update() {
   if (!ready_)  // downloading?
     return;
@@ -159,18 +161,30 @@ void Strategy::update() {
   }
 }
 
-// market data change
+// market data have changed
 void Strategy::refresh() {
   if (!shared_.ready)
     return;
-  double residual = 0.0;
-  for (auto &[_, instrument] : instruments_)
-    residual += instrument.value();
+  auto residual = compute_implied_from_market_data();
   if (std::isnan(residual))
     return;
-  log::info("DEBUG residual={}"sv, residual);
+  log::info("DEBUG residual_from_impact_price={}"sv, residual);
   for (auto &[_, instrument] : instruments_)
     instrument.update(residual);
+}
+
+double Strategy::compute_implied_from_market_data() {
+  auto result = 0.0;
+  for (auto &[_, instrument] : instruments_)
+    result += instrument.compute_partial_from_impact_price();
+  return result;
+}
+
+double Strategy::compute_implied_from_working_orders() {
+  auto result = 0.0;
+  for (auto &[_, instrument] : instruments_)
+    result += instrument.compute_partial_from_order_price();
+  return result;
 }
 
 // order management

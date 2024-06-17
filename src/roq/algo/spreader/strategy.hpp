@@ -42,6 +42,9 @@ struct Strategy final : public client::Handler {
 
   void refresh();
 
+  double compute_implied_from_market_data();
+  double compute_implied_from_working_orders();
+
   template <typename T>
   void dispatch_2(Event<T> const &);
 

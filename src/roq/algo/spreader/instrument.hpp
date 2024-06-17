@@ -33,9 +33,9 @@ struct Instrument final {
   bool update_reference_data();
   bool update_market_data();
 
-  double value() const {
-    return weight_ * impact_price_;  // partial contribution to the linear model
-  }
+  double compute_partial_from_impact_price() const { return weight_ * impact_price_; }
+
+  double compute_partial_from_order_price() const { return weight_ * order_price_; }
 
   void update(double residual);
 
