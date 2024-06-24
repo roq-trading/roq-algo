@@ -39,6 +39,14 @@ else()
   set(RT_LIBRARIES)
 endif()
 
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(CTest)
+endif()
+
+if(BUILD_TESTING)
+  find_package(Catch2 REQUIRED)
+endif()
+
 # autogen
 
 find_program(ROQ_AUTOGEN roq-autogen REQUIRED)
@@ -58,17 +66,11 @@ include_directories(
 
 # sub-projects
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/roq/algo)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# test
-
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/test)
 endif()
-
-find_package(Catch2 REQUIRED)
-
-add_subdirectory(${CMAKE_SOURCE_DIR}/test)
 
 # benchmark
 
