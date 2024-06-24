@@ -33,7 +33,8 @@ auto create_market_by_price(auto &exchange, auto &symbol) {
 
 Instrument::Instrument(Shared &shared, std::string_view const &exchange, std::string_view const &symbol, Side side, double total_quantity, double weight)
     : shared_{shared}, symbol_{symbol}, side_{side}, total_quantity_{total_quantity}, weight_{weight},
-      threshold_quantity_{compute_threshold_quantity(shared_.settings, total_quantity_)}, market_by_price_{create_market_by_price(exchange, symbol)} {
+      threshold_quantity_{compute_threshold_quantity(shared_.settings, total_quantity_)}, market_by_price_{create_market_by_price(exchange, symbol)},
+      target_quantity_{total_quantity_} {
   assert(side_ != Side{});
   assert(utils::compare(total_quantity_, 0.0) > 0);
   assert(utils::compare(threshold_quantity_, 0.0) > 0);
@@ -44,9 +45,10 @@ void Instrument::clear() {
   // reference data
   //   note! keeping all reference data
   // market data
+  trading_status_ = {};
   top_of_book_ = {};
-  impact_price_ = std::numeric_limits<double>::quiet_NaN();
-  target_price_ = std::numeric_limits<double>::quiet_NaN();
+  impact_price_ = NaN;
+  target_price_ = NaN;
   market_data_ready_ = false;
   // order management
   //   XXX TODO
@@ -78,8 +80,9 @@ bool Instrument::operator()(Event<ReferenceData> const &event) {
   return update_reference_data();
 }
 
-bool Instrument::operator()(Event<MarketStatus> const &) {
-  // XXX TODO
+bool Instrument::operator()(Event<MarketStatus> const &event) {
+  if (utils::update(trading_status_, event.value.trading_status))
+    return update_market_data();
   return false;
 }
 
@@ -102,11 +105,11 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
       case SELL:
         return layer.bid_price;
     }
-    return std::numeric_limits<double>::quiet_NaN();  // note! we ensure the linear model evaluates to NaN when this price becomes "unavailable"
+    return NaN;  // note! we ensure the linear model evaluates to NaN when this price becomes "unavailable"
   }();
   auto updated = [&]() {
     if (std::isnan(impact_price) && !std::isnan(impact_price_)) {
-      impact_price_ = std::numeric_limits<double>::quiet_NaN();
+      impact_price_ = NaN;
       return true;
     } else {
       return utils::update(impact_price_, impact_price);
@@ -125,52 +128,57 @@ bool Instrument::operator()(Event<MarketByPriceUpdate> const &event) {
       case SELL:
         return top_of_book_.bid_price;
     }
-    return std::numeric_limits<double>::quiet_NaN();
+    return NaN;
   }();
   log::info("[{}:{}] impact_price={} (best_price={})"sv, symbol_, side_, impact_price_, best_price);
   update_market_data();
   return true;
 }
 
-void Instrument::operator()(Event<OrderAck> const &event) {
+bool Instrument::operator()(Event<OrderAck> const &event) {
   auto &order_ack = event.value;
   if (utils::has_request_failed(order_ack.request_status))
     log::fatal("order_ack={}"sv, order_ack);  // note! fail hard so we can resolve any issues
-  if (!utils::has_request_completed(order_ack.request_status))
-    return;
-  switch (order_ack.request_type) {
-    using enum RequestType;
-    case UNDEFINED:
-      assert(false);
-      break;
-    case CREATE_ORDER:
-      assert(state_ == State::CREATING);
-      (*this)(State::READY);
-      assert(std::isnan(order_price_));
-      break;
-    case MODIFY_ORDER:
-      assert(state_ == State::MODIFYING);
-      (*this)(State::READY);
-      break;
-    case CANCEL_ORDER:
-      assert(false);
-      break;
+  if (utils::has_request_completed(order_ack.request_status)) {
+    switch (order_ack.request_type) {
+      using enum RequestType;
+      case UNDEFINED:
+        assert(false);
+        break;
+      case CREATE_ORDER:
+        assert(state_ == State::CREATING);
+        (*this)(State::READY);
+        assert(std::isnan(order_price_));
+        break;
+      case MODIFY_ORDER:
+        assert(state_ == State::MODIFYING);
+        (*this)(State::READY);
+        break;
+      case CANCEL_ORDER:
+        assert(false);
+        break;
+    }
+    assert(!std::isnan(request_price_));
+    request_price_ = NaN;
+    if (utils::update(order_price_, order_ack.price))
+      log::info("[{}:{}] order_price={} (version={})"sv, symbol_, side_, order_price_, order_ack.version);
+    auto now = clock::get_system();
+    refresh(now);
   }
-  assert(!std::isnan(request_price_));
-  request_price_ = std::numeric_limits<double>::quiet_NaN();
-  if (utils::update(order_price_, order_ack.price))
-    log::info("[{}:{}] order_price={} (version={})"sv, symbol_, side_, order_price_, order_ack.version);
-  auto now = clock::get_system();
-  refresh(now);
+  return false;
 }
 
-void Instrument::operator()(Event<OrderUpdate> const &) {
+bool Instrument::operator()(Event<OrderUpdate> const &event) {
+  auto &order_update = event.value;
+  return utils::update_max(traded_quantity_, order_update.traded_quantity);
 }
 
-void Instrument::operator()(Event<TradeUpdate> const &) {
+bool Instrument::operator()(Event<TradeUpdate> const &) {
+  return false;
 }
 
-void Instrument::operator()(Event<PositionUpdate> const &) {
+bool Instrument::operator()(Event<PositionUpdate> const &) {
+  return false;
 }
 
 // reference data have changed
@@ -192,7 +200,7 @@ bool Instrument::update_reference_data() {
 // our market data have changed
 bool Instrument::update_market_data() {
   // XXX TODO check market status
-  auto market_data_ready = !std::isnan(impact_price_);
+  auto market_data_ready = trading_status_ == TradingStatus::OPEN && !std::isnan(impact_price_);
   if (!utils::update(market_data_ready_, market_data_ready))
     return false;
   log::info("[{}:{}] market_data_ready={}"sv, symbol_, side_, market_data_ready_);
@@ -214,6 +222,15 @@ void Instrument::update(double residual) {
   auto target_price = market::round_away(side_, raw_target_price, tick_size_);
   if (utils::update(target_price_, target_price)) {
     log::info("[{}:{}] target_price={}"sv, symbol_, side_, target_price_);
+    log::info(
+        "[{}:{}] RESIDUAL={}, TARGET_SPREAD={}, DELTA={}, RAW_TARGET_PRICE={}, IMPACT_PRICE={}"sv,
+        symbol_,
+        side_,
+        residual,
+        target_spread,
+        delta,
+        raw_target_price,
+        impact_price_);
     DEBUG_print();
     auto now = clock::get_system();
     refresh(now);
@@ -237,8 +254,8 @@ void Instrument::refresh(std::chrono::nanoseconds now) {
       return;
     }
     // note!
-    //   reduce the number of order modifications
-    //   we can wait if the spread widens in our favour
+    //   trying to reduce the number of order modifications
+    //   we can wait a little if the spread widens in our favour
     auto can_wait = [&]() {
       switch (side_) {
         using enum Side;
@@ -252,6 +269,7 @@ void Instrument::refresh(std::chrono::nanoseconds now) {
       }
       return false;
     }();
+    // XXX TODO also check distance to best
     if (can_wait) {
       if (next_refresh_.count() == 0)
         next_refresh_ = now + shared_.settings.delay;
@@ -260,7 +278,7 @@ void Instrument::refresh(std::chrono::nanoseconds now) {
         return;
       }
     }
-    modify_order();
+    modify_price();
   }
   request_price_ = target_price_;
 }
@@ -278,14 +296,14 @@ void Instrument::create_order() {
       .side = side_,
       .position_effect = {},
       .margin_mode = {},
-      .max_show_quantity = std::numeric_limits<double>::quiet_NaN(),
+      .max_show_quantity = NaN,
       .order_type = OrderType::LIMIT,
       .time_in_force = TimeInForce::GTC,
       .execution_instructions = {},
       .request_template = {},
-      .quantity = total_quantity_,
+      .quantity = target_quantity_,
       .price = target_price_,
-      .stop_price = std::numeric_limits<double>::quiet_NaN(),
+      .stop_price = NaN,
       .routing_id = {},
       .strategy_id = shared_.settings.strategy_id,
   };
@@ -295,11 +313,12 @@ void Instrument::create_order() {
     state_ = State::CREATING;
   } catch (NotConnected &e) {
     log::info("[{}:{}] {}"sv, symbol_, side_, e);
-    // XXX TODO review what to do
+    // note! we expect this to be followed by the Disconnected event
+    // XXX TODO review if we need to do something here
   }
 }
 
-void Instrument::modify_order() {
+void Instrument::modify_price() {
   assert(!order_id_);
   assert(!std::isnan(order_price_));
   assert(!std::isnan(target_price_));
@@ -308,7 +327,7 @@ void Instrument::modify_order() {
       .account = shared_.settings.account,
       .order_id = order_id_,
       .request_template = {},
-      .quantity = std::numeric_limits<double>::quiet_NaN(),
+      .quantity = NaN,
       .price = target_price_,
       .routing_id = {},
       .version = {},
@@ -321,7 +340,35 @@ void Instrument::modify_order() {
     next_refresh_ = {};
   } catch (NotConnected &e) {
     log::info("[{}:{}] {}"sv, symbol_, side_, e);
-    // XXX TODO review what to do
+    // note! we expect this to be followed by the Disconnected event
+    // XXX TODO review if we need to do something here
+  }
+}
+
+void Instrument::modify_quantity() {
+  assert(!order_id_);
+  assert(!std::isnan(order_price_));
+  assert(!std::isnan(target_price_));
+  assert(utils::compare(order_price_, target_price_) != 0);
+  auto modify_order = ModifyOrder{
+      .account = shared_.settings.account,
+      .order_id = order_id_,
+      .request_template = {},
+      .quantity = target_quantity_,
+      .price = NaN,
+      .routing_id = {},
+      .version = {},
+      .conditional_on_version = {},
+  };
+  log::info("[{}:{}] *** MODIFY *** modify_order={}"sv, symbol_, side_, modify_order);
+  try {
+    shared_.dispatcher.send(modify_order, 0u);
+    state_ = State::MODIFYING;
+    next_refresh_ = {};
+  } catch (NotConnected &e) {
+    log::info("[{}:{}] {}"sv, symbol_, side_, e);
+    // note! we expect this to be followed by the Disconnected event
+    // XXX TODO review if we need to do something here
   }
 }
 
@@ -330,8 +377,37 @@ void Instrument::operator()(State state) {
     log::info("[{}:{}] state={}"sv, symbol_, side_, magic_enum::enum_name(state_));
 }
 
+// XXX REMEMBER to track and check average price
+// XXX REMEMBER to round to min_trade_vol
+void Instrument::refresh_positions(double completion) {
+  auto reference_quantity = completion * total_quantity_;                        // 2
+  auto aggress_quantity = std::max(reference_quantity - traded_quantity_, 0.0);  // 2
+  auto target_quantity = std::max((total_quantity_ - traded_quantity_) - reference_quantity, 0.0);
+  if (utils::compare(target_quantity, total_quantity_) > 0)
+    log::fatal("HERE"sv);
+  if (utils::update(target_quantity_, target_quantity))
+    modify_quantity();
+
+  // completed
+  // working (passive)
+  // working (aggressive)
+  //
+  // assert(completed <= reference)
+  //
+  // reference == completed ==> continue as-is
+  //
+  // working (passive) < completed:
+  //   modify quantity DOWN <<== ALWAYS
+  //   send aggressive order
+  //
+  // XXX TODO aggress
+}
+
+// DEBUG
+
 void Instrument::DEBUG_print() {
-  log::debug("[{}:{}] target_price={}, impact_price={}, top_of_book={}"sv, symbol_, side_, target_price_, impact_price_, top_of_book_);
+  log::info(
+      "[{}:{}] order_price={}, target_price={}, impact_price={}, top_of_book={}"sv, symbol_, side_, order_price_, target_price_, impact_price_, top_of_book_);
 }
 
 }  // namespace spreader

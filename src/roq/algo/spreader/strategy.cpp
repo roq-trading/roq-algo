@@ -72,6 +72,10 @@ Strategy::Strategy(client::Dispatcher &dispatcher, Settings const &settings)
 void Strategy::operator()(Event<Timer> const &event) {
   for (auto &[_, instrument] : instruments_)
     instrument(event);
+  if (next_refresh_ < event.value.now) {
+    next_refresh_ = event.value.now + 2s;
+    DEBUG_print();
+  }
 }
 
 void Strategy::operator()(Event<Connected> const &) {
@@ -123,19 +127,23 @@ void Strategy::operator()(Event<MarketByPriceUpdate> const &event) {
 }
 
 void Strategy::operator()(Event<OrderAck> const &event) {
-  dispatch_2(event);
+  if (dispatch(event))
+    update_positions();
 }
 
 void Strategy::operator()(Event<OrderUpdate> const &event) {
-  dispatch_2(event);
-  auto residual = compute_implied_from_working_orders();
-  log::info("DEBUG residual_from_order_price={}"sv, residual);
+  if (dispatch(event))
+    update_positions();
 }
 
-void Strategy::operator()(Event<TradeUpdate> const &) {
+void Strategy::operator()(Event<TradeUpdate> const &event) {
+  if (dispatch(event))
+    update_positions();
 }
 
-void Strategy::operator()(Event<PositionUpdate> const &) {
+void Strategy::operator()(Event<PositionUpdate> const &event) {
+  if (dispatch(event))
+    update_positions();
 }
 
 // market data
@@ -165,7 +173,7 @@ void Strategy::update() {
 void Strategy::refresh() {
   if (!shared_.ready)
     return;
-  auto residual = compute_implied_from_market_data();
+  auto residual = compute_implied_from_impact_price();
   if (std::isnan(residual))
     return;
   log::info("DEBUG residual_from_impact_price={}"sv, residual);
@@ -173,28 +181,28 @@ void Strategy::refresh() {
     instrument.update(residual);
 }
 
-double Strategy::compute_implied_from_market_data() {
+double Strategy::compute_implied_from_impact_price() {
   auto result = 0.0;
   for (auto &[_, instrument] : instruments_)
     result += instrument.compute_partial_from_impact_price();
   return result;
 }
 
-double Strategy::compute_implied_from_working_orders() {
-  auto result = 0.0;
+void Strategy::update_positions() {
+  auto completion = 0.0;
   for (auto &[_, instrument] : instruments_)
-    result += instrument.compute_partial_from_order_price();
-  return result;
+    completion = std::max(completion, instrument.completed());
+  for (auto &[_, instrument] : instruments_)
+    instrument.refresh_positions(completion);
 }
 
-// order management
+// DEBUG
 
-template <typename T>
-void Strategy::dispatch_2(Event<T> const &event) {
-  auto iter = instruments_.find(event.value.symbol);
-  if (iter == std::end(instruments_)) [[unlikely]]
-    log::fatal(R"(Unexpected: symbol="{}")"sv, event.value.symbol);
-  (*iter).second(event);
+void Strategy::DEBUG_print() {
+  log::info(">>>"sv);
+  for (auto &[_, instrument] : instruments_)
+    instrument.DEBUG_print();
+  log::info("<<<"sv);
 }
 
 }  // namespace spreader

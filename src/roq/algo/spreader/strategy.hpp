@@ -42,16 +42,17 @@ struct Strategy final : public client::Handler {
 
   void refresh();
 
-  double compute_implied_from_market_data();
-  double compute_implied_from_working_orders();
+  double compute_implied_from_impact_price();
 
-  template <typename T>
-  void dispatch_2(Event<T> const &);
+  void update_positions();
+
+  void DEBUG_print();
 
  private:
   Shared shared_;
   bool ready_ = {};
   roq::utils::unordered_map<std::string, Instrument> instruments_;
+  std::chrono::nanoseconds next_refresh_ = {};
 };
 
 }  // namespace spreader

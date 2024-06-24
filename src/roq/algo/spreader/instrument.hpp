@@ -25,21 +25,25 @@ struct Instrument final {
   bool operator()(Event<MarketStatus> const &);
   bool operator()(Event<MarketByPriceUpdate> const &);
 
-  void operator()(Event<OrderAck> const &);
-  void operator()(Event<OrderUpdate> const &);
-  void operator()(Event<TradeUpdate> const &);
-  void operator()(Event<PositionUpdate> const &);
+  bool operator()(Event<OrderAck> const &);
+  bool operator()(Event<OrderUpdate> const &);
+  bool operator()(Event<TradeUpdate> const &);
+  bool operator()(Event<PositionUpdate> const &);
 
   bool update_reference_data();
   bool update_market_data();
 
   double compute_partial_from_impact_price() const { return weight_ * impact_price_; }
 
-  double compute_partial_from_order_price() const { return weight_ * order_price_; }
-
   void update(double residual);
 
   void refresh(std::chrono::nanoseconds now);
+
+  double completed() const { return completion_; }
+
+  void refresh_positions(double completion);
+
+  void DEBUG_print();
 
  protected:
   enum class State {
@@ -51,9 +55,8 @@ struct Instrument final {
   void operator()(State);
 
   void create_order();
-  void modify_order();
-
-  void DEBUG_print();
+  void modify_price();
+  void modify_quantity();
 
  private:
   Shared &shared_;
@@ -64,13 +67,14 @@ struct Instrument final {
   double const weight_;
   double const threshold_quantity_;
   // reference data
-  double min_trade_vol_ = std::numeric_limits<double>::quiet_NaN();
-  double tick_size_ = std::numeric_limits<double>::quiet_NaN();
+  double min_trade_vol_ = NaN;
+  double tick_size_ = NaN;
   // market data
+  TradingStatus trading_status_ = {};
   std::unique_ptr<cache::MarketByPrice> market_by_price_;
   Layer top_of_book_ = {};
-  double impact_price_ = std::numeric_limits<double>::quiet_NaN();  // price where we might be able to aggress the remaining quantity
-  double target_price_ = std::numeric_limits<double>::quiet_NaN();  // price where we want to place an order to at least achieve the target spread
+  double impact_price_ = NaN;  // price where we might be able to aggress the remaining quantity
+  double target_price_ = NaN;  // price where we want to place an order to at least achieve the target spread
   // status
   bool reference_data_ready_ = {};
   bool market_data_ready_ = {};
@@ -78,9 +82,12 @@ struct Instrument final {
   // EXPERIMENTAL
   uint64_t order_id_ = {};
   State state_ = {};
-  double request_price_ = std::numeric_limits<double>::quiet_NaN();
-  double order_price_ = std::numeric_limits<double>::quiet_NaN();
+  double request_price_ = NaN;
+  double order_price_ = NaN;
   std::chrono::nanoseconds next_refresh_ = {};
+  double target_quantity_;
+  double traded_quantity_ = {};
+  double completion_ = {};
 };
 
 }  // namespace spreader
