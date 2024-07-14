@@ -1,5 +1,5 @@
 package:
-  name: roq-algo
+  name: roq-cpp-algo-playground
   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
@@ -40,4 +40,4 @@ about:
   license: Commercial
   license_family: PROPRIETARY
   license_file: LICENSE
-  summary: Roq Algo Tools
+  summary: Roq C++ Algo Playground

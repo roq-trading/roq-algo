@@ -16,7 +16,7 @@ message("Using GIT_REPO_VERSION=${GIT_REPO_VERSION}")
 
 # project
 
-project(roq-algo VERSION ${GIT_REPO_VERSION})
+project(roq-cpp-algo-playground VERSION ${GIT_REPO_VERSION})
 
 # filesystem
 
