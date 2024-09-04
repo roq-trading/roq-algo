@@ -28,8 +28,11 @@ requirements:
     - catch2
     - fmt
     - libabseil
+    - roq-api
     - roq-client
     - roq-flags
+    - roq-logging
+    - roq-market
     - roq-oss-benchmark
     - roq-utils
 
