@@ -35,12 +35,6 @@ find_package(roq-market REQUIRED)
 find_package(roq-utils REQUIRED)
 find_package(unordered_dense REQUIRED)
 
-if(UNIX AND NOT APPLE)
-  set(RT_LIBRARIES rt)
-else()
-  set(RT_LIBRARIES)
-endif()
-
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(CTest)
 endif()
