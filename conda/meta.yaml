@@ -1,5 +1,5 @@
 package:
-  name: roq-cpp-algo-playground
+  name: roq-algo
   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
@@ -18,19 +18,14 @@ build:
 requirements:
   build:
     - {{ compiler('cxx') }}
-    - clangdev
     - cmake
-    - jinja2
     - make
     - pkg-config
-    - roq-autogen
   host:
     - catch2
     - fmt
-    - libabseil
     - roq-api
-    - roq-client
-    - roq-flags
+    - roq-cache
     - roq-logging
     - roq-market
     - roq-oss-benchmark

@@ -16,7 +16,7 @@ message("Using GIT_REPO_VERSION=${GIT_REPO_VERSION}")
 
 # project
 
-project(roq-cpp-algo-playground VERSION ${GIT_REPO_VERSION})
+project(roq-algo VERSION ${GIT_REPO_VERSION})
 
 # filesystem
 
@@ -24,12 +24,10 @@ include(GNUInstallDirs)
 
 # dependencies
 
-find_package(absl REQUIRED)
 find_package(fmt REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(roq-api REQUIRED)
-find_package(roq-client REQUIRED)
-find_package(roq-flags REQUIRED)
+find_package(roq-cache REQUIRED)
 find_package(roq-logging REQUIRED)
 find_package(roq-market REQUIRED)
 find_package(roq-utils REQUIRED)
@@ -43,22 +41,9 @@ if(BUILD_TESTING)
   find_package(Catch2 REQUIRED)
 endif()
 
-# autogen
-
-find_program(ROQ_AUTOGEN roq-autogen REQUIRED)
-
-set(TEMPLATE_DIR ${CMAKE_SOURCE_DIR}/scripts/templates)
-
-# clang-format
-
-find_program(CLANG_FORMAT clang-format REQUIRED)
-
 # include
 
-include_directories(
-  ${CMAKE_SOURCE_DIR}/src
-  # >>> autogen >>>
-  ${CMAKE_BINARY_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 
 # sub-projects
 
@@ -73,3 +58,11 @@ endif()
 find_package(benchmark REQUIRED)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/benchmark)
+
+# install
+
+install(
+  DIRECTORY ${CMAKE_SOURCE_DIR}/include/roq/
+  DESTINATION include/roq
+  FILES_MATCHING
+  PATTERN "*.hpp")

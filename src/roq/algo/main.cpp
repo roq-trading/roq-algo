@@ -1,15 +1,13 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#pragma once
+#include "roq/algo.hpp"
+
+using namespace std::literals;
 
 namespace roq {
 namespace algo {
-namespace tools {
 
-struct Simple final {
-  static int add(int a, int b);
-};
+// === IMPLEMENTATION ===
 
-}  // namespace tools
 }  // namespace algo
 }  // namespace roq
