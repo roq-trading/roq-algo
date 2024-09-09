@@ -69,12 +69,12 @@ struct Simple final : public Matcher {
 
   void dispatch_trade_update(MessageInfo const &, Order const &, Fill const &);
 
-  void try_match();
-
-  bool can_match(Side, int64_t price) const;
+  bool is_aggressive(Side, int64_t price) const;
 
   void add_order(uint64_t order_id, Side, int64_t price);
   void remove_order(uint64_t order_id, Side, int64_t price);
+
+  void try_match();
 
  private:
   Matcher::Dispatcher &dispatcher_;

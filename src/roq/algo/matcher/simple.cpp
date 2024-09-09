@@ -220,8 +220,18 @@ void Simple::operator()(Event<CreateOrder> const &event) {
       if (overflow) [[unlikely]]
         log::fatal("Unexpected"sv);  // XXX FIXME
       add_order(order.order_id, order.side, price);
-      if (can_match(create_order.side, price)) {
-        // XXX FIXME TODO
+      if (is_aggressive(create_order.side, price)) {
+        auto fill = Fill{
+            .exchange_time_utc = {},  // XXX FIXME
+            .external_trade_id = {},  // XXX FIXME
+            .quantity = create_order.quantity,
+            .price = create_order.price,
+            .liquidity = Liquidity::TAKER,
+            .quote_quantity = NaN,
+            .commission_quantity = NaN,
+            .commission_currency = {},
+        };
+        dispatch_trade_update(message_info, order, fill);
         order.order_status = OrderStatus::COMPLETED;
       } else {
         order.order_status = OrderStatus::WORKING;
@@ -364,13 +374,17 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, Order const 
 
 // order
 
-void Simple::try_match() {
-  // XXX FIXME TODO
-}
-
-bool Simple::can_match(Side side, int64_t price) const {
-  return false;
-  // XXX FIXME TODO
+bool Simple::is_aggressive(Side side, int64_t price) const {
+  switch (side) {
+    using enum Side;
+    [[unlikely]] case UNDEFINED:
+      break;
+    case BUY:
+      return price >= best_.second;
+    case SELL:
+      return price <= best_.first;
+  }
+  log::fatal("Unexpected"sv);
 }
 
 void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
@@ -378,7 +392,6 @@ void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       log::fatal("Unexpected"sv);
-      break;
     case BUY:
       add_order_helper(buy_, compare_buy, order_id, price);
       break;
@@ -393,7 +406,6 @@ void Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       log::fatal("Unexpected"sv);
-      break;
     case BUY:
       remove_order_helper(buy_, compare_buy, order_id, price);
       break;
@@ -401,6 +413,10 @@ void Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
       remove_order_helper(sell_, compare_sell, order_id, price);
       break;
   }
+}
+
+void Simple::try_match() {
+  // XXX FIXME TODO
 }
 
 }  // namespace matcher
