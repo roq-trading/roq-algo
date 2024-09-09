@@ -73,12 +73,14 @@ struct Simple final : public Matcher {
 
   bool can_match(Side, int64_t price) const;
 
-  void add(uint64_t order_id, Side, int64_t price);
-  void remove(uint64_t order_id, Side, int64_t price);
+  void add_order(uint64_t order_id, Side, int64_t price);
+  void remove_order(uint64_t order_id, Side, int64_t price);
 
  private:
   Matcher::Dispatcher &dispatcher_;
   // config
+  std::string const exchange_;
+  std::string const symbol_;
   MatchingSource const matching_source_;
   // market
   double tick_size_ = NaN;
@@ -88,12 +90,13 @@ struct Simple final : public Matcher {
   std::unique_ptr<cache::MarketByPrice> market_by_price_;
   std::unique_ptr<cache::MarketByOrder> market_by_order_;
   std::pair<int64_t, int64_t> best_ = {};
+  // account
+  utils::unordered_set<std::string> accounts_;
   // order
+  uint64_t max_order_id_ = {};
   utils::unordered_map<uint64_t, Order> order_;
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;
-  // ...
-  utils::unordered_set<std::string> accounts_;
 };
 
 }  // namespace matcher
