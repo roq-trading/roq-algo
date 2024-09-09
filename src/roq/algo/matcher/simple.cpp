@@ -80,12 +80,13 @@ void add_order_helper(auto &container, auto &compare, auto order_id, auto price)
   }
 }
 
-void remove_order_helper(auto &container, auto &compare, auto order_id, auto price) {
+auto remove_order_helper(auto &container, auto &compare, auto order_id, auto price) {
   std::pair value{price, order_id};
   auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
-  if (iter == std::end(container) || (*iter).first != price || (*iter).second != order_id) [[unlikely]]  // non-existing?
-    log::fatal("Unexpected"sv);
+  if (iter == std::end(container) || (*iter).first != price || (*iter).second != order_id)
+    return false;
   container.erase(iter);
+  return true;
 }
 }  // namespace
 
@@ -250,18 +251,21 @@ void Simple::operator()(Event<CancelOrder> const &event) {
   auto found = [&](auto &order) {
     if (utils::is_order_complete(order.order_status)) {
       dispatch_order_ack(event, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
-      return;
+    } else {
+      auto version = cancel_order.version ? cancel_order.version : 2;
+      order.max_request_version = version;                             // XXX FIXME framework
+      dispatch_order_ack(event, order, {}, RequestStatus::FORWARDED);  // XXX FIXME framework
+      auto [price, overflow] = market::price_to_ticks(order.price, tick_size_, precision_);
+      if (overflow) [[unlikely]]
+        log::fatal("Unexpected"sv);  // XXX FIXME
+      if (remove_order(order.order_id, order.side, price)) {
+        order.order_status = OrderStatus::CANCELED;
+        dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+      } else {
+        dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
+      }
+      dispatch_order_update(message_info, order);
     }
-    auto version = cancel_order.version ? cancel_order.version : 2;
-    dispatch_order_ack(event, order, {}, RequestStatus::FORWARDED);  // XXX FIXME framework
-    dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-    order.max_request_version = version;  // XXX FIXME framework
-    auto [price, overflow] = market::price_to_ticks(order.price, tick_size_, precision_);
-    if (overflow) [[unlikely]]
-      log::fatal("Unexpected"sv);  // XXX FIXME
-    remove_order(order.order_id, order.side, price);
-    order.order_status = OrderStatus::CANCELED;
-    dispatch_order_update(message_info, order);
   };
   auto not_found = [&]() { dispatch_order_ack(event, Error::INVALID_ORDER_ID); };
   if (find_order(event, found)) {
@@ -385,18 +389,17 @@ void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
   }
 }
 
-void Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
+bool Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
-      log::fatal("Unexpected"sv);
+      break;
     case BUY:
-      remove_order_helper(buy_, compare_buy, order_id, price);
-      break;
+      return remove_order_helper(buy_, compare_buy, order_id, price);
     case SELL:
-      remove_order_helper(sell_, compare_sell, order_id, price);
-      break;
+      return remove_order_helper(sell_, compare_sell, order_id, price);
   }
+  log::fatal("Unexpected"sv);
 }
 
 void Simple::try_match() {

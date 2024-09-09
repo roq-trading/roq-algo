@@ -72,7 +72,8 @@ struct Simple final : public Matcher {
   bool is_aggressive(Side, int64_t price) const;
 
   void add_order(uint64_t order_id, Side, int64_t price);
-  void remove_order(uint64_t order_id, Side, int64_t price);
+
+  bool remove_order(uint64_t order_id, Side, int64_t price);
 
   void try_match();
 
