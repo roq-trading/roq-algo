@@ -166,8 +166,10 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   (*market_by_order_)(event);
   if (config_.source != Source::MARKET_BY_ORDER)
     return;
-  log::fatal("NOT IMPLEMENTED"sv);
-  // (*market_by_order_).extract({&best_internal_, 1}, true);
+  Layer layer;
+  (*market_by_order_).extract_2({&layer, 1});
+  Event event_2{message_info, layer};
+  (*this)(event_2);
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
