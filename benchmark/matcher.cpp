@@ -31,8 +31,11 @@ void BM_tools_Simple_add(benchmark::State &state) {
     void operator()(Event<PositionUpdate> const &) override {}
     void operator()(Event<FundsUpdate> const &) override {}
   } dispatcher;
+  auto config = Config{
+      .source = algo::matcher::Source::TOP_OF_BOOK,
+  };
   for (auto _ : state) {
-    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, "deribit"sv, "BTC-PERPETUAL"sv);
+    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, "deribit"sv, "BTC-PERPETUAL"sv, config);
   }
 }
 

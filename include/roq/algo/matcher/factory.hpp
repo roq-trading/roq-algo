@@ -9,6 +9,8 @@
 
 #include "roq/matcher.hpp"
 
+#include "roq/algo/matcher/config.hpp"
+
 namespace roq {
 namespace algo {
 namespace matcher {
@@ -18,7 +20,7 @@ struct ROQ_PUBLIC Factory final {
     SIMPLE,
   };
 
-  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, std::string_view const &exchange, std::string_view const &symbol);
+  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
 };
 
 }  // namespace matcher

@@ -108,9 +108,9 @@ void try_match_helper(auto &container, auto compare, auto best, auto &orders, Ca
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Matcher::Dispatcher &dispatcher, std::string_view const &exchange, std::string_view const &symbol, MatchingSource market_data_source)
-    : dispatcher_{dispatcher}, exchange_{exchange}, symbol_{symbol}, matching_source_{market_data_source},
-      market_by_price_{create_market_by_price(exchange_, symbol_)}, market_by_order_{create_market_by_order(exchange_, symbol_)} {
+Simple::Simple(Matcher::Dispatcher &dispatcher, std::string_view const &exchange, std::string_view const &symbol, Config const &config)
+    : dispatcher_{dispatcher}, exchange_{exchange}, symbol_{symbol}, config_{config}, market_by_price_{create_market_by_price(exchange_, symbol_)},
+      market_by_order_{create_market_by_order(exchange_, symbol_)} {
 }
 
 void Simple::operator()(Event<GatewaySettings> const &event) {
@@ -158,7 +158,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   dispatcher_(event);  // note! overlay own orders?
   if (!top_of_book_(event))
     return;
-  if (matching_source_ != MatchingSource::TOP_OF_BOOK)
+  if (config_.source != Source::TOP_OF_BOOK)
     return;
   Event event_2{message_info, top_of_book_.layer};
   (*this)(event_2);
@@ -169,7 +169,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
   dispatcher_(event);  // note! overlay own orders?
   (*market_by_price_)(event);
-  if (matching_source_ != MatchingSource::MARKET_BY_PRICE)
+  if (config_.source != Source::MARKET_BY_PRICE)
     return;
   Layer layer;
   (*market_by_price_).extract({&layer, 1}, true);
@@ -182,7 +182,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
   dispatcher_(event);  // note! overlay own orders?
   (*market_by_order_)(event);
-  if (matching_source_ != MatchingSource::MARKET_BY_ORDER)
+  if (config_.source != Source::MARKET_BY_ORDER)
     return;
   log::fatal("NOT IMPLEMENTED"sv);
   // (*market_by_order_).extract({&best_internal_, 1}, true);

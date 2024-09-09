@@ -15,6 +15,8 @@
 #include "roq/cache/market_status.hpp"
 #include "roq/cache/top_of_book.hpp"
 
+#include "roq/algo/matcher/config.hpp"
+
 #include "roq/algo/matcher/order.hpp"
 
 namespace roq {
@@ -29,17 +31,9 @@ namespace matcher {
 //
 // best market update
 // - fills those orders crossing the market
-//
-// enum config to control what market data source to use for matching
 
 struct Simple final : public Matcher {
-  enum class MatchingSource {
-    TOP_OF_BOOK,
-    MARKET_BY_PRICE,
-    MARKET_BY_ORDER,
-  };
-
-  Simple(Matcher::Dispatcher &, std::string_view const &exchange, std::string_view const &symbol, MatchingSource);
+  Simple(Matcher::Dispatcher &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
 
   Simple(Simple const &) = delete;
 
@@ -95,7 +89,7 @@ struct Simple final : public Matcher {
   // config
   std::string const exchange_;
   std::string const symbol_;
-  MatchingSource const matching_source_;
+  Config const config_;
   // market
   std::chrono::nanoseconds exchange_time_utc_ = {};
   double tick_size_ = NaN;

@@ -31,6 +31,9 @@ TEST_CASE("simple", "[algo/matcher]") {
     void operator()(Event<PositionUpdate> const &) override {}
     void operator()(Event<FundsUpdate> const &) override {}
   } dispatcher;
-  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, "deribit"sv, "BTC-PERPETUAL"sv);
+  auto config = Config{
+      .source = algo::matcher::Source::TOP_OF_BOOK,
+  };
+  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, "deribit"sv, "BTC-PERPETUAL"sv, config);
   CHECK((1 + 1) == 2);
 }
