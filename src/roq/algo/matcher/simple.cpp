@@ -68,7 +68,7 @@ auto compare_sell = [](auto &lhs, auto &rhs) {
   return false;
 };
 
-void add_order_helper(auto &container, auto &compare, auto order_id, auto price) {
+void add_order_helper(auto &container, auto compare, auto order_id, auto price) {
   std::pair value{price, order_id};
   auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
   if (iter != std::end(container)) {
@@ -80,13 +80,28 @@ void add_order_helper(auto &container, auto &compare, auto order_id, auto price)
   }
 }
 
-auto remove_order_helper(auto &container, auto &compare, auto order_id, auto price) {
+auto remove_order_helper(auto &container, auto compare, auto order_id, auto price) {
   std::pair value{price, order_id};
   auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
   if (iter == std::end(container) || (*iter).first != price || (*iter).second != order_id)
     return false;
   container.erase(iter);
   return true;
+}
+
+template <typename Callback>
+void try_match_helper(auto &container, auto compare, auto best, auto &orders, Callback callback) {
+  while (!std::empty(container)) {
+    auto &[price, order_id] = container.front();
+    if (!compare(price, best))
+      return;
+    auto iter = orders.find(order_id);
+    if (iter == std::end(orders)) [[unlikely]]
+      log::fatal("Unexpected: internal error"sv);
+    auto &order = (*iter).second;
+    callback(order);
+    container.erase(std::begin(container));  // XXX FIXME TODO we can postpone this and erase just once
+  }
 }
 }  // namespace
 
@@ -133,34 +148,35 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 }
 
 void Simple::operator()(Event<TopOfBook> const &event) {
-  dispatcher_(event);
+  auto &[message_info, top_of_book] = event;
+  dispatcher_(event);  // note! overlay own orders?
   if (!top_of_book_(event))
     return;
   if (matching_source_ != MatchingSource::TOP_OF_BOOK)
     return;
-  (*this)(top_of_book_.layer);
-  try_match();
+  Event event_2{message_info, top_of_book_.layer};
+  (*this)(event_2);
 }
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
-  dispatcher_(event);  // another option would be to overlay our own orders before forwarding
+  auto &[message_info, market_by_price_update] = event;
+  dispatcher_(event);  // note! overlay own orders?
   (*market_by_price_)(event);
   if (matching_source_ != MatchingSource::MARKET_BY_PRICE)
     return;
   Layer layer;
   (*market_by_price_).extract({&layer, 1}, true);
-  (*this)(layer);
-  try_match();
+  Event event_2{message_info, layer};
+  (*this)(event_2);
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
-  dispatcher_(event);  // another option would be to overlay our own orders before forwarding
+  dispatcher_(event);  // note! overlay own orders?
   (*market_by_order_)(event);
   if (matching_source_ != MatchingSource::MARKET_BY_ORDER)
     return;
   log::fatal("NOT IMPLEMENTED"sv);
   // (*market_by_order_).extract({&best_, 1}, true);
-  try_match();
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
@@ -218,11 +234,23 @@ void Simple::operator()(Event<CreateOrder> const &event) {
         log::fatal("Unexpected"sv);  // XXX FIXME
       add_order(order.order_id, order.side, price);
       if (is_aggressive(create_order.side, price)) {
+        auto matched_price = [&]() -> double {
+          switch (create_order.side) {
+            using enum Side;
+            [[unlikely]] case UNDEFINED:
+              break;
+            case BUY:
+              return best_raw_.second;
+            case SELL:
+              return best_raw_.first;
+          }
+          log::fatal("Unexpected"sv);
+        }();
         auto fill = Fill{
             .exchange_time_utc = {},  // XXX FIXME
             .external_trade_id = {},  // XXX FIXME
             .quantity = create_order.quantity,
-            .price = create_order.price,
+            .price = matched_price,
             .liquidity = Liquidity::TAKER,
             .quote_quantity = NaN,
             .commission_quantity = NaN,
@@ -288,7 +316,8 @@ void Simple::operator()(Event<FundsUpdate> const &event) {
 
 // market
 
-void Simple::operator()(Layer const &layer) {
+void Simple::operator()(Event<Layer> const &event) {
+  auto &[message_info, layer] = event;
   assert(!std::isnan(tick_size_));
   assert(precision_ != Precision{});
   auto convert = [this](auto price, auto default_value) {
@@ -299,10 +328,31 @@ void Simple::operator()(Layer const &layer) {
     }
     return default_value;
   };
-  best_ = {
-      convert(layer.bid_price, std::numeric_limits<int64_t>::min()),
-      convert(layer.ask_price, std::numeric_limits<int64_t>::max()),
+  auto matched_order = [&](auto &order) {
+    auto fill = Fill{
+        .exchange_time_utc = {},  // XXX FIXME
+        .external_trade_id = {},  // XXX FIXME
+        .quantity = order.remaining_quantity,
+        .price = order.price,
+        .liquidity = Liquidity::MAKER,
+        .quote_quantity = NaN,
+        .commission_quantity = NaN,
+        .commission_currency = {},
+    };
+    dispatch_trade_update(message_info, order, fill);
+    order.order_status = OrderStatus::COMPLETED;
+    dispatch_order_update(message_info, order);
   };
+  auto bid = convert(layer.bid_price, std::numeric_limits<int64_t>::min());
+  if (utils::update(best_.first, bid)) {
+    best_raw_.first = layer.bid_price;
+    try_match(Side::BUY, matched_order);
+  }
+  auto ask = convert(layer.ask_price, std::numeric_limits<int64_t>::max());
+  if (utils::update(best_.second, ask)) {
+    best_raw_.second = layer.ask_price;
+    try_match(Side::SELL, matched_order);
+  }
 }
 
 // order
@@ -402,8 +452,24 @@ bool Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
   log::fatal("Unexpected"sv);
 }
 
-void Simple::try_match() {
-  // XXX FIXME TODO
+template <typename Callback>
+void Simple::try_match(Side side, Callback callback) {
+  switch (side) {
+    using enum Side;
+    [[unlikely]] case UNDEFINED:
+      log::fatal("Unexpected"sv);
+      break;
+    case BUY: {
+      auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
+      try_match_helper(sell_, compare, best_.first, order_, callback);
+      break;
+    }
+    case SELL: {
+      auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
+      try_match_helper(buy_, compare, best_.second, order_, callback);
+      break;
+    }
+  }
 }
 
 }  // namespace matcher

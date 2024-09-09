@@ -54,7 +54,7 @@ struct Simple final : public Matcher {
   void operator()(Event<CancelAllOrders> const &) override;
 
  protected:
-  void operator()(Layer const &);
+  void operator()(Event<Layer> const &);
 
   template <typename T, typename Callback>
   bool find_order(Event<T> const &, Callback);
@@ -75,7 +75,8 @@ struct Simple final : public Matcher {
 
   bool remove_order(uint64_t order_id, Side, int64_t price);
 
-  void try_match();
+  template <typename Callback>
+  void try_match(Side, Callback);
 
  private:
   Matcher::Dispatcher &dispatcher_;
@@ -91,6 +92,7 @@ struct Simple final : public Matcher {
   std::unique_ptr<cache::MarketByPrice> market_by_price_;
   std::unique_ptr<cache::MarketByOrder> market_by_order_;
   std::pair<int64_t, int64_t> best_ = {};
+  std::pair<double, double> best_raw_ = {NaN, NaN};
   // account
   utils::unordered_set<std::string> accounts_;
   // order
