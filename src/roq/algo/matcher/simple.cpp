@@ -42,6 +42,14 @@ auto const DEFAULT_GATEWAY_SETTINGS = GatewaySettings{
 // === HELPERS ===
 
 namespace {
+auto create_market_by_price(auto &exchange, auto &symbol) {
+  return market::mbp::Factory::create(exchange, symbol, DEFAULT_GATEWAY_SETTINGS);
+}
+
+auto create_market_by_order(auto &exchange, auto &symbol) {
+  return market::mbo::Factory::create(exchange, symbol);
+}
+
 // note! first is price which is used for the primary ordering, second is order_id which gives us the priority
 
 auto compare_buy = [](auto &lhs, auto &rhs) {
@@ -78,18 +86,6 @@ void remove_order_helper(auto &container, auto &compare, auto order_id, auto pri
   if (iter == std::end(container) || (*iter).first != price || (*iter).second != order_id) [[unlikely]]  // non-existing?
     log::fatal("Unexpected"sv);
   container.erase(iter);
-}
-}  // namespace
-
-// === IMPLEMENTATION ===
-
-namespace {
-auto create_market_by_price(auto &exchange, auto &symbol) {
-  return market::mbp::Factory::create(exchange, symbol, DEFAULT_GATEWAY_SETTINGS);
-}
-
-auto create_market_by_order(auto &exchange, auto &symbol) {
-  return market::mbo::Factory::create(exchange, symbol);
 }
 }  // namespace
 
@@ -339,18 +335,6 @@ void Simple::dispatch_order_update(MessageInfo const &message_info, Order const 
 }
 
 void Simple::dispatch_trade_update(MessageInfo const &message_info, Order const &order, Fill const &fill) {
-  /*
-  auto fill = Fill{
-      .exchange_time_utc = {},  // XXX FIXME
-      .external_trade_id = {},  // XXX FIXME
-      .quantity = quantity,
-      .price = price,
-      .liquidity = liquidity,
-      .quote_quantity = NaN,
-      .commission_quantity = NaN,
-      .commission_currency = {},
-  };
-  */
   auto trade_update = TradeUpdate{
       .account = order.account,
       .order_id = order.order_id,
@@ -372,7 +356,7 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, Order const 
   create_event_and_dispatch(dispatcher_, message_info, trade_update);
 }
 
-// order
+// utils
 
 bool Simple::is_aggressive(Side side, int64_t price) const {
   switch (side) {
