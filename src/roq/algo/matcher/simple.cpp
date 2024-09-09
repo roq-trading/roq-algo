@@ -73,7 +73,7 @@ void add_order_helper(auto &container, auto compare, auto order_id, auto price) 
   auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
   if (iter != std::end(container)) {
     if ((*iter).first == price && (*iter).second == order_id) [[unlikely]]  // duplicate?
-      log::fatal("Unexpected"sv);
+      log::fatal("Unexpected: internal error"sv);
     container.insert(iter, value);
   } else {
     container.emplace_back(value);
@@ -91,17 +91,18 @@ auto remove_order_helper(auto &container, auto compare, auto order_id, auto pric
 
 template <typename Callback>
 void try_match_helper(auto &container, auto compare, auto best, auto &orders, Callback callback) {
-  while (!std::empty(container)) {
-    auto &[price, order_id] = container.front();
+  auto iter = std::begin(container);
+  for (; iter != std::end(container); ++iter) {
+    auto &[price, order_id] = *iter;
     if (!compare(price, best))
-      return;
+      break;
     auto iter = orders.find(order_id);
     if (iter == std::end(orders)) [[unlikely]]
       log::fatal("Unexpected: internal error"sv);
     auto &order = (*iter).second;
     callback(order);
-    container.erase(std::begin(container));  // XXX FIXME TODO we can postpone this and erase just once
   }
+  container.erase(std::begin(container), iter);
 }
 }  // namespace
 
@@ -128,6 +129,8 @@ void Simple::operator()(Event<GatewayStatus> const &event) {
 }
 
 void Simple::operator()(Event<ReferenceData> const &event) {
+  auto &[message_info, reference_data] = event;
+  utils::update_max(exchange_time_utc_, reference_data.exchange_time_utc);
   dispatcher_(event);
   top_of_book_(event);
   (*market_by_price_)(event);
@@ -136,12 +139,14 @@ void Simple::operator()(Event<ReferenceData> const &event) {
     auto precision = market::increment_to_precision(tick_size_);
     if (static_cast<std::underlying_type<decltype(precision)>::type>(precision) < static_cast<std::underlying_type<decltype(precision_)>::type>(precision_))
       log::fatal("Unexpected"sv);  // note! we can't support loss of precision
-    // XXX FIXME resize
+    // XXX FIXME internal prices must be scaled relatively
     precision_ = precision;
   }
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
+  auto &[message_info, market_status] = event;
+  utils::update_max(exchange_time_utc_, market_status.exchange_time_utc);
   dispatcher_(event);
   if (!market_status_(event))
     return;
@@ -149,6 +154,7 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 
 void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
+  utils::update_max(exchange_time_utc_, top_of_book.exchange_time_utc);
   dispatcher_(event);  // note! overlay own orders?
   if (!top_of_book_(event))
     return;
@@ -160,6 +166,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
+  utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
   dispatcher_(event);  // note! overlay own orders?
   (*market_by_price_)(event);
   if (matching_source_ != MatchingSource::MARKET_BY_PRICE)
@@ -171,19 +178,25 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
+  auto &[message_info, market_by_order_update] = event;
+  utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
   dispatcher_(event);  // note! overlay own orders?
   (*market_by_order_)(event);
   if (matching_source_ != MatchingSource::MARKET_BY_ORDER)
     return;
   log::fatal("NOT IMPLEMENTED"sv);
-  // (*market_by_order_).extract({&best_, 1}, true);
+  // (*market_by_order_).extract({&best_internal_, 1}, true);
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
+  auto &[message_info, trade_summary] = event;
+  utils::update_max(exchange_time_utc_, trade_summary.exchange_time_utc);
   dispatcher_(event);
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
+  auto &[message_info, statistics_update] = event;
+  utils::update_max(exchange_time_utc_, statistics_update.exchange_time_utc);
   dispatcher_(event);
 }
 
@@ -223,7 +236,7 @@ void Simple::operator()(Event<CreateOrder> const &event) {
       assert(order_id > 0);
       max_order_id_ = create_order.order_id;
       dispatch_order_ack(event, {}, RequestStatus::FORWARDED);  // XXX FIXME framework
-      auto res = order_.emplace(order_id, event);
+      auto res = orders_.emplace(order_id, event);
       assert(res.second);
       auto &order = (*res.first).second;
       dispatch_order_ack(event, {}, RequestStatus::ACCEPTED);
@@ -240,15 +253,16 @@ void Simple::operator()(Event<CreateOrder> const &event) {
             [[unlikely]] case UNDEFINED:
               break;
             case BUY:
-              return best_raw_.second;
+              return best_external_.second;
             case SELL:
-              return best_raw_.first;
+              return best_external_.first;
           }
           log::fatal("Unexpected"sv);
         }();
+        auto external_trade_id = fmt::format("trd-{}"sv, ++trade_id_);
         auto fill = Fill{
-            .exchange_time_utc = {},  // XXX FIXME
-            .external_trade_id = {},  // XXX FIXME
+            .exchange_time_utc = exchange_time_utc_,
+            .external_trade_id = external_trade_id,
             .quantity = create_order.quantity,
             .price = matched_price,
             .liquidity = Liquidity::TAKER,
@@ -261,7 +275,7 @@ void Simple::operator()(Event<CreateOrder> const &event) {
       } else {
         order.order_status = OrderStatus::WORKING;
       }
-      dispatch_order_update(message_info, order);
+      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
     }
   };
   if (find_order(event, found)) {
@@ -292,7 +306,7 @@ void Simple::operator()(Event<CancelOrder> const &event) {
       } else {
         dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
       }
-      dispatch_order_update(message_info, order);
+      dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
     }
   };
   auto not_found = [&]() { dispatch_order_ack(event, Error::INVALID_ORDER_ID); };
@@ -329,9 +343,10 @@ void Simple::operator()(Event<Layer> const &event) {
     return default_value;
   };
   auto matched_order = [&](auto &order) {
+    auto external_trade_id = fmt::format("trd-{}"sv, ++trade_id_);
     auto fill = Fill{
-        .exchange_time_utc = {},  // XXX FIXME
-        .external_trade_id = {},  // XXX FIXME
+        .exchange_time_utc = exchange_time_utc_,
+        .external_trade_id = external_trade_id,
         .quantity = order.remaining_quantity,
         .price = order.price,
         .liquidity = Liquidity::MAKER,
@@ -341,16 +356,16 @@ void Simple::operator()(Event<Layer> const &event) {
     };
     dispatch_trade_update(message_info, order, fill);
     order.order_status = OrderStatus::COMPLETED;
-    dispatch_order_update(message_info, order);
+    dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
   };
   auto bid = convert(layer.bid_price, std::numeric_limits<int64_t>::min());
-  if (utils::update(best_.first, bid)) {
-    best_raw_.first = layer.bid_price;
+  if (utils::update(best_internal_.first, bid)) {
+    best_external_.first = layer.bid_price;
     try_match(Side::BUY, matched_order);
   }
   auto ask = convert(layer.ask_price, std::numeric_limits<int64_t>::max());
-  if (utils::update(best_.second, ask)) {
-    best_raw_.second = layer.ask_price;
+  if (utils::update(best_internal_.second, ask)) {
+    best_external_.second = layer.ask_price;
     try_match(Side::SELL, matched_order);
   }
 }
@@ -361,8 +376,8 @@ template <typename T, typename Callback>
 bool Simple::find_order(Event<T> const &event, Callback callback) {
   auto order_id = get_order_id(event.value);
   assert(order_id > 0);
-  auto iter = order_.find(order_id);
-  if (iter == std::end(order_))
+  auto iter = orders_.find(order_id);
+  if (iter == std::end(orders_))
     return false;
   callback((*iter).second);
   return true;
@@ -382,9 +397,9 @@ void Simple::dispatch_order_ack(Event<T> const &event, Order const &order, Error
   create_event_and_dispatch(dispatcher_, message_info, order_ack);
 }
 
-void Simple::dispatch_order_update(MessageInfo const &message_info, Order const &order) {
+void Simple::dispatch_order_update(MessageInfo const &message_info, Order const &order, UpdateType update_type) {
   auto order_update = static_cast<OrderUpdate>(order);
-  order_update.update_type = UpdateType::SNAPSHOT;  // XXX check
+  order_update.update_type = update_type;
   create_event_and_dispatch(dispatcher_, message_info, order_update);
 }
 
@@ -401,10 +416,10 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, Order const 
       .update_time_utc = message_info.receive_time_utc,
       .external_account = {},
       .external_order_id = {},
-      .client_order_id = {},  // XXX FIXME
+      .client_order_id = {},
       .fills = {&fill, 1},
       .routing_id = {},
-      .update_type = UpdateType::SNAPSHOT,  // XXX check
+      .update_type = UpdateType::SNAPSHOT,
       .user = {},
   };
   create_event_and_dispatch(dispatcher_, message_info, trade_update);
@@ -418,9 +433,9 @@ bool Simple::is_aggressive(Side side, int64_t price) const {
     [[unlikely]] case UNDEFINED:
       break;
     case BUY:
-      return price >= best_.second;
+      return price >= best_internal_.second;
     case SELL:
-      return price <= best_.first;
+      return price <= best_internal_.first;
   }
   log::fatal("Unexpected"sv);
 }
@@ -458,15 +473,14 @@ void Simple::try_match(Side side, Callback callback) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       log::fatal("Unexpected"sv);
-      break;
     case BUY: {
       auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
-      try_match_helper(sell_, compare, best_.first, order_, callback);
+      try_match_helper(sell_, compare, best_internal_.first, orders_, callback);
       break;
     }
     case SELL: {
       auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
-      try_match_helper(buy_, compare, best_.second, order_, callback);
+      try_match_helper(buy_, compare, best_internal_.second, orders_, callback);
       break;
     }
   }

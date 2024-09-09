@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,17 @@
 namespace roq {
 namespace algo {
 namespace matcher {
+
+// simple matcher
+//
+// placing a new order
+// - immediately filled if price cross the market (opposite side)
+// - leaves a resting order if price does not cross the market
+//
+// best market update
+// - fills those orders crossing the market
+//
+// enum config to control what market data source to use for matching
 
 struct Simple final : public Matcher {
   enum class MatchingSource {
@@ -65,7 +77,7 @@ struct Simple final : public Matcher {
   template <typename T>
   void dispatch_order_ack(Event<T> const &, Order const &, Error, RequestStatus = {});
 
-  void dispatch_order_update(MessageInfo const &, Order const &);
+  void dispatch_order_update(MessageInfo const &, Order const &, UpdateType);
 
   void dispatch_trade_update(MessageInfo const &, Order const &, Fill const &);
 
@@ -85,21 +97,27 @@ struct Simple final : public Matcher {
   std::string const symbol_;
   MatchingSource const matching_source_;
   // market
+  std::chrono::nanoseconds exchange_time_utc_ = {};
   double tick_size_ = NaN;
   Precision precision_ = {};
   cache::MarketStatus market_status_;
   cache::TopOfBook top_of_book_;
   std::unique_ptr<cache::MarketByPrice> market_by_price_;
   std::unique_ptr<cache::MarketByOrder> market_by_order_;
-  std::pair<int64_t, int64_t> best_ = {};
-  std::pair<double, double> best_raw_ = {NaN, NaN};
+  std::pair<int64_t, int64_t> best_internal_ = {
+      std::numeric_limits<int64_t>::min(),
+      std::numeric_limits<int64_t>::max(),
+  };
+  std::pair<double, double> best_external_ = {NaN, NaN};
   // account
   utils::unordered_set<std::string> accounts_;
-  // order
+  // orders
   uint64_t max_order_id_ = {};
-  utils::unordered_map<uint64_t, Order> order_;
+  utils::unordered_map<uint64_t, Order> orders_;
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;
+  // trades
+  uint64_t trade_id_ = {};
 };
 
 }  // namespace matcher
