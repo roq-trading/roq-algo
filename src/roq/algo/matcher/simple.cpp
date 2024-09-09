@@ -21,29 +21,11 @@ namespace roq {
 namespace algo {
 namespace matcher {
 
-// === CONSTANTS ===
-
-namespace {
-auto const DEFAULT_GATEWAY_SETTINGS = GatewaySettings{
-    .supports = {},
-    .mbp_max_depth = {},
-    .mbp_tick_size_multiplier = NaN,
-    .mbp_min_trade_vol_multiplier = NaN,
-    .mbp_allow_remove_non_existing = true,  // note! client assumes server does validation
-    .mbp_allow_price_inversion = true,      // note! client assumes server does validation
-    .mbp_checksum = false,
-    .oms_download_has_state = false,
-    .oms_download_has_routing_id = false,
-    .oms_request_id_type = {},
-    .oms_cancel_all_orders = {},
-};
-}  // namespace
-
 // === HELPERS ===
 
 namespace {
 auto create_market_by_price(auto &exchange, auto &symbol) {
-  return market::mbp::Factory::create(exchange, symbol, DEFAULT_GATEWAY_SETTINGS);
+  return market::mbp::Factory::create(exchange, symbol);
 }
 
 auto create_market_by_order(auto &exchange, auto &symbol) {
