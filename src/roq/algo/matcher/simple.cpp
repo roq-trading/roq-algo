@@ -13,8 +13,6 @@
 
 #include "roq/market/mbo/factory.hpp"
 
-#include "roq/algo/matcher/utils.hpp"
-
 using namespace std::literals;
 
 namespace roq {
@@ -72,17 +70,16 @@ auto remove_order_helper(auto &container, auto compare, auto order_id, auto pric
 }
 
 template <typename Callback>
-void try_match_helper(auto &container, auto compare, auto best, auto &orders, Callback callback) {
+void try_match_helper(auto &container, auto compare, auto best, auto &cache, Callback callback) {
   auto iter = std::begin(container);
   for (; iter != std::end(container); ++iter) {
     auto &[price, order_id] = *iter;
     if (!compare(price, best))
       break;
-    auto iter = orders.find(order_id);
-    if (iter == std::end(orders)) [[unlikely]]
+    if (cache.get_order(order_id, [&](auto &order) { callback(order); })) {
+    } else {
       log::fatal("Unexpected: internal error"sv);
-    auto &order = (*iter).second;
-    callback(order);
+    }
   }
   container.erase(std::begin(container), iter);
 }
@@ -90,30 +87,15 @@ void try_match_helper(auto &container, auto compare, auto best, auto &orders, Ca
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Matcher::Dispatcher &dispatcher, std::string_view const &exchange, std::string_view const &symbol, Config const &config)
-    : dispatcher_{dispatcher}, exchange_{exchange}, symbol_{symbol}, config_{config}, market_by_price_{create_market_by_price(exchange_, symbol_)},
-      market_by_order_{create_market_by_order(exchange_, symbol_)} {
+Simple::Simple(Dispatcher &dispatcher, Cache &cache, std::string_view const &exchange, std::string_view const &symbol, Config const &config)
+    : dispatcher_{dispatcher}, cache_{cache}, config_{config}, market_by_price_{create_market_by_price(exchange, symbol)},
+      market_by_order_{create_market_by_order(exchange, symbol)} {
 }
 
-void Simple::operator()(Event<GatewaySettings> const &event) {
-  dispatcher_(event);
-}
-
-void Simple::operator()(Event<StreamStatus> const &event) {
-  dispatcher_(event);
-}
-
-// note! delayed extraction of accounts (to avoid config requirement)
-void Simple::operator()(Event<GatewayStatus> const &event) {
-  if (!std::empty(event.value.account))
-    accounts_.emplace(event.value.account);
-  dispatcher_(event);
-}
-
+// note! you're not allowed to override reference data
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
   utils::update_max(exchange_time_utc_, reference_data.exchange_time_utc);
-  dispatcher_(event);
   top_of_book_(event);
   (*market_by_price_)(event);
   (*market_by_order_)(event);
@@ -126,10 +108,10 @@ void Simple::operator()(Event<ReferenceData> const &event) {
   }
 }
 
+// note! you're not allowed to override market status
 void Simple::operator()(Event<MarketStatus> const &event) {
   auto &[message_info, market_status] = event;
   utils::update_max(exchange_time_utc_, market_status.exchange_time_utc);
-  dispatcher_(event);
   if (!market_status_(event))
     return;
 }
@@ -137,7 +119,7 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   utils::update_max(exchange_time_utc_, top_of_book.exchange_time_utc);
-  dispatcher_(event);  // note! overlay own orders?
+  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
   if (!top_of_book_(event))
     return;
   if (config_.source != Source::TOP_OF_BOOK)
@@ -149,7 +131,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
   utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
-  dispatcher_(event);  // note! overlay own orders?
+  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
   (*market_by_price_)(event);
   if (config_.source != Source::MARKET_BY_PRICE)
     return;
@@ -162,7 +144,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto &[message_info, market_by_order_update] = event;
   utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
-  dispatcher_(event);  // note! overlay own orders?
+  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
   (*market_by_order_)(event);
   if (config_.source != Source::MARKET_BY_ORDER)
     return;
@@ -175,141 +157,94 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
 void Simple::operator()(Event<TradeSummary> const &event) {
   auto &[message_info, trade_summary] = event;
   utils::update_max(exchange_time_utc_, trade_summary.exchange_time_utc);
-  dispatcher_(event);
+  dispatcher_(event);  // note! dispatch market data (potentially overlay own fills here)
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
   auto &[message_info, statistics_update] = event;
   utils::update_max(exchange_time_utc_, statistics_update.exchange_time_utc);
-  dispatcher_(event);
+  dispatcher_(event);  // note! dispatch market data (potentially overlay own fills here)
 }
 
-void Simple::operator()(Event<CreateOrder> const &event) {
+void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
   auto &[message_info, create_order] = event;
-  auto found = [&]([[maybe_unused]] auto &order) { dispatch_order_ack(event, Error::INVALID_ORDER_ID); };
   auto validate = [&]() -> Error {
-    if (accounts_.find(create_order.account) == std::end(accounts_))
-      return Error::INVALID_ACCOUNT;
-    if (create_order.order_id <= max_order_id_)
-      return Error::INVALID_ORDER_ID;
-    if (create_order.exchange != exchange_)
-      return Error::INVALID_EXCHANGE;
-    if (create_order.symbol != symbol_)
-      return Error::INVALID_SYMBOL;
-    if (create_order.side == Side{})
-      return Error::INVALID_SIDE;
-    if (std::isnan(create_order.quantity) || utils::is_zero(create_order.quantity))
-      return Error::INVALID_QUANTITY;
+    // note! simulator will already have validated the request and here we just need to validate based on what is supported
     if (create_order.order_type != OrderType::LIMIT)
       return Error::INVALID_ORDER_TYPE;
     if (create_order.time_in_force != TimeInForce::GTC)
       return Error::INVALID_TIME_IN_FORCE;
     if (create_order.execution_instructions != Mask<ExecutionInstruction>{})
       return Error::INVALID_EXECUTION_INSTRUCTION;
-    if (std::isnan(create_order.price))
-      return Error::INVALID_PRICE;
     if (!std::isnan(create_order.stop_price))
       return Error::INVALID_STOP_PRICE;
     return {};
   };
-  auto not_found = [&]() {
-    if (auto error = validate(); error != Error{}) {
-      dispatch_order_ack(event, error);
-    } else {
-      auto order_id = get_order_id(event.value);
-      assert(order_id > 0);
-      max_order_id_ = create_order.order_id;
-      dispatch_order_ack(event, {}, RequestStatus::FORWARDED);  // XXX FIXME framework
-      auto res = orders_.emplace(order_id, event);
-      assert(res.second);
-      auto &order = (*res.first).second;
-      dispatch_order_ack(event, {}, RequestStatus::ACCEPTED);
-      order.max_response_version = 1;  // XXX FIXME framework
-      order.max_accepted_version = 1;  // XXX FIXME framework
-      auto [price, overflow] = market::price_to_ticks(create_order.price, tick_size_, precision_);
-      if (overflow) [[unlikely]]
-        log::fatal("Unexpected"sv);  // XXX FIXME
-      add_order(order.order_id, order.side, price);
-      if (is_aggressive(create_order.side, price)) {
-        auto matched_price = [&]() -> double {
-          switch (create_order.side) {
-            using enum Side;
-            [[unlikely]] case UNDEFINED:
-              break;
-            case BUY:
-              return best_external_.second;
-            case SELL:
-              return best_external_.first;
-          }
-          log::fatal("Unexpected"sv);
-        }();
-        auto external_trade_id = fmt::format("trd-{}"sv, ++trade_id_);
-        auto fill = Fill{
-            .exchange_time_utc = exchange_time_utc_,
-            .external_trade_id = external_trade_id,
-            .quantity = create_order.quantity,
-            .price = matched_price,
-            .liquidity = Liquidity::TAKER,
-            .quote_quantity = NaN,
-            .commission_quantity = NaN,
-            .commission_currency = {},
-        };
-        dispatch_trade_update(message_info, order, fill);
-        order.order_status = OrderStatus::COMPLETED;
-      } else {
-        order.order_status = OrderStatus::WORKING;
-      }
-      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
-    }
-  };
-  if (find_order(event, found)) {
+  if (auto error = validate(); error != Error{}) {
+    dispatch_order_ack(event, order, error);
   } else {
-    not_found();
+    dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+    auto [price, overflow] = market::price_to_ticks(create_order.price, tick_size_, precision_);
+    if (overflow) [[unlikely]]
+      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    add_order(order.order_id, order.side, price);
+    if (is_aggressive(create_order.side, price)) {
+      auto matched_price = [&]() -> double {
+        switch (create_order.side) {
+          using enum Side;
+          [[unlikely]] case UNDEFINED:
+            break;
+          case BUY:
+            return best_.external.second;
+          case SELL:
+            return best_.external.first;
+        }
+        log::fatal("Unexpected"sv);
+      }();
+      auto external_trade_id = fmt::format("trd-{}"sv, cache_.get_next_trade_id());
+      auto fill = Fill{
+          .exchange_time_utc = exchange_time_utc_,
+          .external_trade_id = external_trade_id,
+          .quantity = create_order.quantity,
+          .price = matched_price,
+          .liquidity = Liquidity::TAKER,
+          .quote_quantity = NaN,
+          .commission_quantity = NaN,
+          .commission_currency = {},
+      };
+      dispatch_trade_update(message_info, order, fill);
+      order.order_status = OrderStatus::COMPLETED;
+    } else {
+      order.order_status = OrderStatus::WORKING;
+    }
+    dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
   }
 }
 
-void Simple::operator()(Event<ModifyOrder> const &event) {
-  dispatch_order_ack(event, Error::NOT_SUPPORTED);
+void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
+  dispatch_order_ack(event, order, Error::NOT_SUPPORTED);
 }
 
-void Simple::operator()(Event<CancelOrder> const &event) {
+void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   auto &[message_info, cancel_order] = event;
-  auto found = [&](auto &order) {
-    if (utils::is_order_complete(order.order_status)) {
-      dispatch_order_ack(event, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
-    } else {
-      auto version = cancel_order.version ? cancel_order.version : 2;
-      order.max_request_version = version;                             // XXX FIXME framework
-      dispatch_order_ack(event, order, {}, RequestStatus::FORWARDED);  // XXX FIXME framework
-      auto [price, overflow] = market::price_to_ticks(order.price, tick_size_, precision_);
-      if (overflow) [[unlikely]]
-        log::fatal("Unexpected"sv);  // XXX FIXME
-      if (remove_order(order.order_id, order.side, price)) {
-        order.order_status = OrderStatus::CANCELED;
-        dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-      } else {
-        dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
-      }
-      dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
-    }
-  };
-  auto not_found = [&]() { dispatch_order_ack(event, Error::INVALID_ORDER_ID); };
-  if (find_order(event, found)) {
+  if (utils::is_order_complete(order.order_status)) {
+    dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
   } else {
-    not_found();
+    auto [price, overflow] = market::price_to_ticks(order.price, tick_size_, precision_);
+    if (overflow) [[unlikely]]
+      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    if (remove_order(order.order_id, order.side, price)) {
+      order.order_status = OrderStatus::CANCELED;
+      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+    } else {
+      dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
+    }
+    dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
   }
 }
 
 void Simple::operator()(Event<CancelAllOrders> const &) {
   log::fatal("NOT IMPLEMENTED"sv);
-}
-
-void Simple::operator()(Event<PositionUpdate> const &event) {
-  dispatcher_(event);
-}
-
-void Simple::operator()(Event<FundsUpdate> const &event) {
-  dispatcher_(event);
 }
 
 // market
@@ -327,7 +262,7 @@ void Simple::operator()(Event<Layer> const &event) {
     return default_value;
   };
   auto matched_order = [&](auto &order) {
-    auto external_trade_id = fmt::format("trd-{}"sv, ++trade_id_);
+    auto external_trade_id = fmt::format("trd-{}"sv, cache_.get_next_trade_id());
     auto fill = Fill{
         .exchange_time_utc = exchange_time_utc_,
         .external_trade_id = external_trade_id,
@@ -343,51 +278,72 @@ void Simple::operator()(Event<Layer> const &event) {
     dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
   };
   auto bid = convert(layer.bid_price, std::numeric_limits<int64_t>::min());
-  if (utils::update(best_internal_.first, bid)) {
-    best_external_.first = layer.bid_price;
+  if (utils::update(best_.units.first, bid)) {
+    best_.external.first = layer.bid_price;
     try_match(Side::BUY, matched_order);
   }
   auto ask = convert(layer.ask_price, std::numeric_limits<int64_t>::max());
-  if (utils::update(best_internal_.second, ask)) {
-    best_external_.second = layer.ask_price;
+  if (utils::update(best_.units.second, ask)) {
+    best_.external.second = layer.ask_price;
     try_match(Side::SELL, matched_order);
   }
 }
 
-// order
-
-template <typename T, typename Callback>
-bool Simple::find_order(Event<T> const &event, Callback callback) {
-  auto order_id = get_order_id(event.value);
-  assert(order_id > 0);
-  auto iter = orders_.find(order_id);
-  if (iter == std::end(orders_))
-    return false;
-  callback((*iter).second);
-  return true;
-}
+// orders
 
 template <typename T>
-void Simple::dispatch_order_ack(Event<T> const &event, Error error, RequestStatus request_status) {
+void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order, Error error, RequestStatus request_status) {
   auto &[message_info, value] = event;
-  auto order_ack = create_order_ack(value, error, request_status);
+  auto get_request_status = [&]() {
+    if (request_status != RequestStatus{})
+      return request_status;
+    if (error != Error{})
+      return RequestStatus::REJECTED;
+    return RequestStatus::ACCEPTED;
+  };
+  auto get_text = [&]() -> std::string_view {
+    if (error != Error{})
+      return magic_enum::enum_name(error);
+    return {};
+  };
+  auto order_ack = OrderAck{
+      .account = order.account,
+      .order_id = order.order_id,
+      .exchange = order.exchange,
+      .symbol = order.symbol,
+      .side = order.side,
+      .position_effect = order.position_effect,
+      .margin_mode = order.margin_mode,
+      .request_type = utils::get_request_type<decltype(value)>(),
+      .origin = Origin::EXCHANGE,
+      .request_status = get_request_status(),
+      .error = error,
+      .text = get_text(),
+      .request_id = {},
+      .external_account = {},
+      .external_order_id = {},
+      .client_order_id = {},
+      .quantity = order.quantity,
+      .price = order.price,
+      .stop_price = order.stop_price,
+      .routing_id = {},
+      .version = utils::get_version(value),
+      .risk_exposure = NaN,
+      .risk_exposure_change = NaN,
+      .traded_quantity = order.traded_quantity,
+      .round_trip_latency = {},
+      .user = {},
+  };
   create_event_and_dispatch(dispatcher_, message_info, order_ack);
 }
 
-template <typename T>
-void Simple::dispatch_order_ack(Event<T> const &event, Order const &order, Error error, RequestStatus request_status) {
-  auto &[message_info, value] = event;
-  auto order_ack = create_order_ack(value, order, error, request_status);
-  create_event_and_dispatch(dispatcher_, message_info, order_ack);
-}
-
-void Simple::dispatch_order_update(MessageInfo const &message_info, Order const &order, UpdateType update_type) {
+void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order const &order, UpdateType update_type) {
   auto order_update = static_cast<OrderUpdate>(order);
   order_update.update_type = update_type;
   create_event_and_dispatch(dispatcher_, message_info, order_update);
 }
 
-void Simple::dispatch_trade_update(MessageInfo const &message_info, Order const &order, Fill const &fill) {
+void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order const &order, Fill const &fill) {
   auto trade_update = TradeUpdate{
       .account = order.account,
       .order_id = order.order_id,
@@ -417,9 +373,9 @@ bool Simple::is_aggressive(Side side, int64_t price) const {
     [[unlikely]] case UNDEFINED:
       break;
     case BUY:
-      return price >= best_internal_.second;
+      return price >= best_.units.second;
     case SELL:
-      return price <= best_internal_.first;
+      return price <= best_.units.first;
   }
   log::fatal("Unexpected"sv);
 }
@@ -459,12 +415,12 @@ void Simple::try_match(Side side, Callback callback) {
       log::fatal("Unexpected"sv);
     case BUY: {
       auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
-      try_match_helper(sell_, compare, best_internal_.first, orders_, callback);
+      try_match_helper(sell_, compare, best_.units.first, cache_, callback);
       break;
     }
     case SELL: {
       auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
-      try_match_helper(buy_, compare, best_internal_.second, orders_, callback);
+      try_match_helper(buy_, compare, best_.units.second, cache_, callback);
       break;
     }
   }

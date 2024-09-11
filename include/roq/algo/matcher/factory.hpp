@@ -7,9 +7,10 @@
 #include <memory>
 #include <string_view>
 
-#include "roq/matcher.hpp"
-
+#include "roq/algo/matcher/cache.hpp"
 #include "roq/algo/matcher/config.hpp"
+#include "roq/algo/matcher/dispatcher.hpp"
+#include "roq/algo/matcher/handler.hpp"
 
 namespace roq {
 namespace algo {
@@ -20,7 +21,7 @@ struct ROQ_PUBLIC Factory final {
     SIMPLE,
   };
 
-  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
+  static std::unique_ptr<Handler> create(Type, Dispatcher &, Cache &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
 };
 
 }  // namespace matcher

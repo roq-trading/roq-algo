@@ -14,12 +14,12 @@ namespace matcher {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<Matcher> Factory::create(
-    Type type, Matcher::Dispatcher &dispatcher, std::string_view const &exchange, std::string_view const &symbol, Config const &config) {
+std::unique_ptr<Handler> Factory::create(
+    Type type, Dispatcher &dispatcher, Cache &cache, std::string_view const &exchange, std::string_view const &symbol, Config const &config) {
   switch (type) {
     using enum Factory::Type;
     case SIMPLE:
-      return std::make_unique<Simple>(dispatcher, exchange, symbol, config);
+      return std::make_unique<Simple>(dispatcher, cache, exchange, symbol, config);
   }
   log::fatal("Unexpected: type={}"sv, magic_enum::enum_name(type));
 }

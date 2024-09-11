@@ -11,14 +11,7 @@ using namespace roq::algo::matcher;
 using namespace std::literals;
 
 TEST_CASE("simple", "[algo/matcher]") {
-  struct Dispatcher final : public Matcher::Dispatcher {
-    void operator()(Event<DownloadBegin> const &) override {}
-    void operator()(Event<DownloadEnd> const &) override {}
-    void operator()(Event<GatewaySettings> const &) override {}
-    void operator()(Event<StreamStatus> const &) override {}
-    void operator()(Event<GatewayStatus> const &) override {}
-    void operator()(Event<ReferenceData> const &) override {}
-    void operator()(Event<MarketStatus> const &) override {}
+  struct MyDispatcher final : public Dispatcher {
     void operator()(Event<TopOfBook> const &) override {}
     void operator()(Event<MarketByPriceUpdate> const &) override {}
     void operator()(Event<MarketByOrderUpdate> const &) override {}
@@ -28,12 +21,14 @@ TEST_CASE("simple", "[algo/matcher]") {
     void operator()(Event<OrderAck> const &) override {}
     void operator()(Event<OrderUpdate> const &) override {}
     void operator()(Event<TradeUpdate> const &) override {}
-    void operator()(Event<PositionUpdate> const &) override {}
-    void operator()(Event<FundsUpdate> const &) override {}
   } dispatcher;
+  struct MyCache final : public Cache {
+    cache::Order *get_order_helper([[maybe_unused]] uint64_t order_id) override { return nullptr; }
+    uint64_t get_next_trade_id() override { return {}; }
+  } cache;
   auto config = Config{
       .source = algo::matcher::Source::TOP_OF_BOOK,
   };
-  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, "deribit"sv, "BTC-PERPETUAL"sv, config);
+  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, cache, "deribit"sv, "BTC-PERPETUAL"sv, config);
   CHECK((1 + 1) == 2);
 }
