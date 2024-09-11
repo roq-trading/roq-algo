@@ -14,6 +14,8 @@ build:
     - CFLAGS=-O3
     - CPPFLAGS=-O3  # [linux]
     - CPPFLAGS=-O3 -D_LIBCPP_DISABLE_AVAILABILITY  # [osx]
+  run_exports:
+    - roq-algo
 
 requirements:
   build:
@@ -40,4 +42,4 @@ about:
   license: Commercial
   license_family: PROPRIETARY
   license_file: LICENSE
-  summary: Roq C++ Algo Playground
+  summary: Roq C++ Algo
