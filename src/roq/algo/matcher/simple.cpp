@@ -92,9 +92,9 @@ Simple::Simple(Dispatcher &dispatcher, Cache &cache, std::string_view const &exc
       market_by_order_{create_market_by_order(exchange, symbol)} {
 }
 
-// note! you're not allowed to override reference data
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
+  dispatcher_(event);
   utils::update_max(exchange_time_utc_, reference_data.exchange_time_utc);
   top_of_book_(event);
   (*market_by_price_)(event);
@@ -108,9 +108,9 @@ void Simple::operator()(Event<ReferenceData> const &event) {
   }
 }
 
-// note! you're not allowed to override market status
 void Simple::operator()(Event<MarketStatus> const &event) {
   auto &[message_info, market_status] = event;
+  dispatcher_(event);
   utils::update_max(exchange_time_utc_, market_status.exchange_time_utc);
   if (!market_status_(event))
     return;
@@ -123,6 +123,8 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   if (!top_of_book_(event))
     return;
   if (config_.source != Source::TOP_OF_BOOK)
+    return;
+  if (std::isnan(tick_size_))  // note! haven't received any reference data
     return;
   Event event_2{message_info, top_of_book_.layer};
   (*this)(event_2);

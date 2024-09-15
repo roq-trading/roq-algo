@@ -12,12 +12,13 @@ using namespace std::literals;
 
 void BM_tools_Simple_add(benchmark::State &state) {
   struct MyDispatcher final : public Dispatcher {
+    void operator()(Event<ReferenceData> const &) override {}
+    void operator()(Event<MarketStatus> const &) override {}
     void operator()(Event<TopOfBook> const &) override {}
     void operator()(Event<MarketByPriceUpdate> const &) override {}
     void operator()(Event<MarketByOrderUpdate> const &) override {}
     void operator()(Event<TradeSummary> const &) override {}
     void operator()(Event<StatisticsUpdate> const &) override {}
-    void operator()(Event<CancelAllOrdersAck> const &) override {}
     void operator()(Event<OrderAck> const &) override {}
     void operator()(Event<OrderUpdate> const &) override {}
     void operator()(Event<TradeUpdate> const &) override {}
