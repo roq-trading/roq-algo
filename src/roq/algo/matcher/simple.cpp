@@ -257,8 +257,8 @@ void Simple::operator()(Event<Layer> const &event) {
   assert(precision_ != Precision{});
   auto convert = [this](auto price, auto default_value) {
     if (!std::isnan(price)) {
-      auto [units, success] = market::price_to_ticks(price, tick_size_, precision_);
-      if (success)
+      auto [units, overflow] = market::price_to_ticks(price, tick_size_, precision_);
+      if (!overflow)
         return units;
     }
     return default_value;
