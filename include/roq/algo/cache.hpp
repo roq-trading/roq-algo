@@ -6,7 +6,6 @@
 
 namespace roq {
 namespace algo {
-namespace matcher {
 
 struct ROQ_PUBLIC Cache {
   template <typename Callback>
@@ -24,6 +23,5 @@ struct ROQ_PUBLIC Cache {
   virtual cache::Order *get_order_helper(uint64_t order_id) = 0;
 };
 
-}  // namespace matcher
 }  // namespace algo
 }  // namespace roq

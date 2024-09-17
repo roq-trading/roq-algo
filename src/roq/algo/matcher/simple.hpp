@@ -10,7 +10,8 @@
 #include "roq/cache/market_status.hpp"
 #include "roq/cache/top_of_book.hpp"
 
-#include "roq/algo/matcher/cache.hpp"
+#include "roq/algo/cache.hpp"
+
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
 #include "roq/algo/matcher/handler.hpp"

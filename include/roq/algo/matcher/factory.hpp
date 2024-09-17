@@ -7,7 +7,8 @@
 #include <memory>
 #include <string_view>
 
-#include "roq/algo/matcher/cache.hpp"
+#include "roq/algo/cache.hpp"
+
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
 #include "roq/algo/matcher/handler.hpp"
