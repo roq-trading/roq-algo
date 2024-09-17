@@ -33,7 +33,7 @@ namespace matcher {
 // - limit orders
 
 struct Simple final : public Handler {
-  Simple(Dispatcher &, Cache &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
+  Simple(Dispatcher &, Config const &, Cache &);
 
   Simple(Simple const &) = delete;
 
@@ -79,8 +79,8 @@ struct Simple final : public Handler {
 
  private:
   Dispatcher &dispatcher_;
-  Cache &cache_;
   Config const config_;
+  Cache &cache_;
   // market
   std::chrono::nanoseconds exchange_time_utc_ = {};
   double tick_size_ = NaN;

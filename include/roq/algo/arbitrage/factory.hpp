@@ -5,7 +5,6 @@
 #include "roq/compat.hpp"
 
 #include <memory>
-#include <string_view>
 
 #include "roq/algo/cache.hpp"
 
@@ -19,8 +18,7 @@ namespace algo {
 namespace arbitrage {
 
 struct ROQ_PUBLIC Factory final {
-  static std::unique_ptr<strategy::Handler> create(
-      strategy::Dispatcher &, Cache &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
+  static std::unique_ptr<strategy::Handler> create(strategy::Dispatcher &, Config const &, Cache &);
 };
 
 }  // namespace arbitrage

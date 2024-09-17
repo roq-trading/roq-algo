@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "roq/compat.hpp"
+
 #include "roq/api.hpp"
 
 #include "roq/cache/order.hpp"

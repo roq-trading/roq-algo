@@ -22,12 +22,12 @@ namespace matcher {
 // === HELPERS ===
 
 namespace {
-auto create_market_by_price(auto &exchange, auto &symbol) {
-  return market::mbp::Factory::create(exchange, symbol);
+auto create_market_by_price(auto &instrument) {
+  return market::mbp::Factory::create(instrument.exchange, instrument.symbol);
 }
 
-auto create_market_by_order(auto &exchange, auto &symbol) {
-  return market::mbo::Factory::create(exchange, symbol);
+auto create_market_by_order(auto &instrument) {
+  return market::mbo::Factory::create(instrument.exchange, instrument.symbol);
 }
 
 // note! first is price which is used for the primary ordering, second is order_id which gives us the priority
@@ -87,9 +87,9 @@ void try_match_helper(auto &container, auto compare, auto best, auto &cache, Cal
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Dispatcher &dispatcher, Cache &cache, std::string_view const &exchange, std::string_view const &symbol, Config const &config)
-    : dispatcher_{dispatcher}, cache_{cache}, config_{config}, market_by_price_{create_market_by_price(exchange, symbol)},
-      market_by_order_{create_market_by_order(exchange, symbol)} {
+Simple::Simple(Dispatcher &dispatcher, Config const &config, Cache &cache)
+    : dispatcher_{dispatcher}, config_{config}, cache_{cache}, market_by_price_{create_market_by_price(config.instrument)},
+      market_by_order_{create_market_by_order(config.instrument)} {
 }
 
 void Simple::operator()(Event<ReferenceData> const &event) {

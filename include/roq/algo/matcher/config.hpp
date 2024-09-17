@@ -6,6 +6,8 @@
 
 #include <fmt/core.h>
 
+#include "roq/algo/instrument.hpp"
+
 #include "roq/algo/matcher/source.hpp"
 
 namespace roq {
@@ -13,6 +15,7 @@ namespace algo {
 namespace matcher {
 
 struct ROQ_PUBLIC Config final {
+  Instrument instrument;
   Source source = {};
 };
 
@@ -28,8 +31,10 @@ struct fmt::formatter<roq::algo::matcher::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
+        R"(instrument={}, )"
         R"(source={})"
         R"(}})"sv,
+        value.instrument,
         value.source);
   }
 };

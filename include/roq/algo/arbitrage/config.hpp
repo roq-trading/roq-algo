@@ -4,13 +4,20 @@
 
 #include "roq/compat.hpp"
 
+#include <span>
+
 #include <fmt/core.h>
+#include <fmt/ranges.h>
+
+#include "roq/algo/instrument.hpp"
 
 namespace roq {
 namespace algo {
 namespace arbitrage {
 
-struct ROQ_PUBLIC Config final {};
+struct ROQ_PUBLIC Config final {
+  std::span<Instrument const> instruments;
+};
 
 }  // namespace arbitrage
 }  // namespace algo
@@ -24,6 +31,8 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(}})"sv);
+        R"(instruments=[{}])"
+        R"(}})"sv,
+        fmt::join(value.instruments, ", "sv));
   }
 };

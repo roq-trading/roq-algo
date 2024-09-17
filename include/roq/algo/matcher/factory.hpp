@@ -5,7 +5,6 @@
 #include "roq/compat.hpp"
 
 #include <memory>
-#include <string_view>
 
 #include "roq/algo/cache.hpp"
 
@@ -22,7 +21,7 @@ struct ROQ_PUBLIC Factory final {
     SIMPLE,
   };
 
-  static std::unique_ptr<Handler> create(Type, Dispatcher &, Cache &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
+  static std::unique_ptr<Handler> create(Type, Dispatcher &, Config const &, Cache &);
 };
 
 }  // namespace matcher

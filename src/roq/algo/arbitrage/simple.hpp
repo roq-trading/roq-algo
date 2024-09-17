@@ -2,13 +2,7 @@
 
 #pragma once
 
-#include <limits>
 #include <vector>
-
-#include "roq/cache/market_by_order.hpp"
-#include "roq/cache/market_by_price.hpp"
-#include "roq/cache/market_status.hpp"
-#include "roq/cache/top_of_book.hpp"
 
 #include "roq/algo/cache.hpp"
 
@@ -22,24 +16,44 @@ namespace algo {
 namespace arbitrage {
 
 struct Simple final : public strategy::Handler {
-  Simple(strategy::Dispatcher &, Cache &, std::string_view const &exchange, std::string_view const &symbol, Config const &);
+  using Dispatcher = strategy::Dispatcher;
+
+  Simple(Dispatcher &, Config const &, Cache &);
 
   Simple(Simple const &) = delete;
 
  protected:
+  void operator()(Event<Connected> const &) override;
+  void operator()(Event<Disconnected> const &) override;
+
+  void operator()(Event<DownloadBegin> const &) override;
+  void operator()(Event<DownloadEnd> const &) override;
+
+  void operator()(Event<Ready> const &) override;
+
   void operator()(Event<ReferenceData> const &) override;
   void operator()(Event<MarketStatus> const &) override;
 
   void operator()(Event<TopOfBook> const &) override;
-  void operator()(Event<MarketByPriceUpdate> const &) override;
-  void operator()(Event<MarketByOrderUpdate> const &) override;
-  void operator()(Event<TradeSummary> const &) override;
-  void operator()(Event<StatisticsUpdate> const &) override;
+
+  void operator()(Event<OrderAck> const &, cache::Order const &) override;
+  void operator()(Event<OrderUpdate> const &, cache::Order const &) override;
+  void operator()(Event<TradeUpdate> const &, cache::Order const &) override;
+
+  struct State final {
+    bool ready = {};
+    double tick_size = NaN;
+    TradingStatus trading_status = {};
+    Layer best;
+  };
+
+  State &get_state(MessageInfo const &);
 
  private:
-  strategy::Dispatcher &dispatcher_;
-  Cache &cache_;
+  Dispatcher &dispatcher_;
   Config const config_;
+  Cache &cache_;
+  std::vector<State> state_;
 };
 
 }  // namespace arbitrage

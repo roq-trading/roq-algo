@@ -28,8 +28,13 @@ TEST_CASE("simple", "[algo/matcher]") {
     uint64_t get_next_trade_id() override { return {}; }
   } cache;
   auto config = Config{
+      .instrument{
+          .source = 0,
+          .exchange = "deribit"sv,
+          .symbol = "BTC-PERPETUAL"sv,
+      },
       .source = algo::matcher::Source::TOP_OF_BOOK,
   };
-  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, cache, "deribit"sv, "BTC-PERPETUAL"sv, config);
+  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, cache);
   CHECK((1 + 1) == 2);
 }

@@ -28,10 +28,15 @@ void BM_tools_Simple_add(benchmark::State &state) {
     uint64_t get_next_trade_id() override { return {}; }
   } cache;
   auto config = Config{
+      .instrument{
+          .source = 0,
+          .exchange = "deribit"sv,
+          .symbol = "BTC-PERPETUAL"sv,
+      },
       .source = algo::matcher::Source::TOP_OF_BOOK,
   };
   for (auto _ : state) {
-    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, cache, "deribit"sv, "BTC-PERPETUAL"sv, config);
+    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, cache);
   }
 }
 
