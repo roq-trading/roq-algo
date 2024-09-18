@@ -79,7 +79,9 @@ struct Simple final : public Handler {
 
  private:
   Dispatcher &dispatcher_;
-  Config const config_;
+  // config
+  Source const source_;
+  // cache
   Cache &cache_;
   // market
   std::chrono::nanoseconds exchange_time_utc_ = {};

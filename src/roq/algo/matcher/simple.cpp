@@ -30,7 +30,7 @@ auto create_market_by_order(auto &instrument) {
   return market::mbo::Factory::create(instrument.exchange, instrument.symbol);
 }
 
-// note! first is price which is used for the primary ordering, second is order_id which gives us the priority
+// note! first is price which is used for the primary ordering, second is order_id which gives us priority
 
 auto compare_buy = [](auto &lhs, auto &rhs) {
   if (lhs.first > rhs.first)
@@ -88,13 +88,13 @@ void try_match_helper(auto &container, auto compare, auto best, auto &cache, Cal
 // === IMPLEMENTATION ===
 
 Simple::Simple(Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, config_{config}, cache_{cache}, market_by_price_{create_market_by_price(config.instrument)},
+    : dispatcher_{dispatcher}, source_{config.source}, cache_{cache}, market_by_price_{create_market_by_price(config.instrument)},
       market_by_order_{create_market_by_order(config.instrument)} {
 }
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
-  dispatcher_(event);
+  dispatcher_(event);  // note! dispatch market data
   utils::update_max(exchange_time_utc_, reference_data.exchange_time_utc);
   top_of_book_(event);
   (*market_by_price_)(event);
@@ -103,14 +103,14 @@ void Simple::operator()(Event<ReferenceData> const &event) {
     auto precision = market::increment_to_precision(tick_size_);
     if (static_cast<std::underlying_type<decltype(precision)>::type>(precision) < static_cast<std::underlying_type<decltype(precision_)>::type>(precision_))
       log::fatal("Unexpected"sv);  // note! we can't support loss of precision
-    // XXX FIXME internal prices must be scaled relatively
+    // XXX FIXME internal prices must now be scaled relatively...
     precision_ = precision;
   }
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   auto &[message_info, market_status] = event;
-  dispatcher_(event);
+  dispatcher_(event);  // note! dispatch market data
   utils::update_max(exchange_time_utc_, market_status.exchange_time_utc);
   if (!market_status_(event))
     return;
@@ -119,12 +119,12 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   utils::update_max(exchange_time_utc_, top_of_book.exchange_time_utc);
-  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
+  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   if (!top_of_book_(event))
     return;
-  if (config_.source != Source::TOP_OF_BOOK)
+  if (source_ != Source::TOP_OF_BOOK)
     return;
-  if (std::isnan(tick_size_))  // note! haven't received any reference data
+  if (std::isnan(tick_size_))  // note! reference data not yet received
     return;
   Event event_2{message_info, top_of_book_.layer};
   (*this)(event_2);
@@ -133,9 +133,9 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
   utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
-  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
+  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   (*market_by_price_)(event);
-  if (config_.source != Source::MARKET_BY_PRICE)
+  if (source_ != Source::MARKET_BY_PRICE)
     return;
   Layer layer;
   (*market_by_price_).extract({&layer, 1}, true);
@@ -146,9 +146,9 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto &[message_info, market_by_order_update] = event;
   utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
-  dispatcher_(event);  // note! dispatch market data (potentially overlay own orders here)
+  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   (*market_by_order_)(event);
-  if (config_.source != Source::MARKET_BY_ORDER)
+  if (source_ != Source::MARKET_BY_ORDER)
     return;
   Layer layer;
   (*market_by_order_).extract_2({&layer, 1});
@@ -159,19 +159,19 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
 void Simple::operator()(Event<TradeSummary> const &event) {
   auto &[message_info, trade_summary] = event;
   utils::update_max(exchange_time_utc_, trade_summary.exchange_time_utc);
-  dispatcher_(event);  // note! dispatch market data (potentially overlay own fills here)
+  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
   auto &[message_info, statistics_update] = event;
   utils::update_max(exchange_time_utc_, statistics_update.exchange_time_utc);
-  dispatcher_(event);  // note! dispatch market data (potentially overlay own fills here)
+  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
 }
 
 void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
   auto &[message_info, create_order] = event;
   auto validate = [&]() -> Error {
-    // note! simulator will already have validated the request and here we just need to validate based on what is supported
+    // note! simulator will already have validated the request and here we just need to validate based on what is supported here
     if (create_order.order_type != OrderType::LIMIT)
       return Error::INVALID_ORDER_TYPE;
     if (create_order.time_in_force != TimeInForce::GTC)

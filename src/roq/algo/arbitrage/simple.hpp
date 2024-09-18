@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "roq/utils/container.hpp"
+
 #include "roq/algo/cache.hpp"
 
 #include "roq/algo/strategy/dispatcher.hpp"
@@ -15,6 +17,20 @@ namespace roq {
 namespace algo {
 namespace arbitrage {
 
+// simple arbitrage
+//
+// prepared to support a list of instruments (n >= 2)
+//
+// assumptions:
+// - only supporting positions (*not* FX-style)
+//
+// Q:
+// - trading size
+// - scaling factor?
+// - max position
+// - latency
+// - liquid vs illiquid leg?
+
 struct Simple final : public strategy::Handler {
   using Dispatcher = strategy::Dispatcher;
 
@@ -23,7 +39,6 @@ struct Simple final : public strategy::Handler {
   Simple(Simple const &) = delete;
 
  protected:
-  void operator()(Event<Connected> const &) override;
   void operator()(Event<Disconnected> const &) override;
 
   void operator()(Event<DownloadBegin> const &) override;
@@ -35,10 +50,15 @@ struct Simple final : public strategy::Handler {
   void operator()(Event<MarketStatus> const &) override;
 
   void operator()(Event<TopOfBook> const &) override;
+  void operator()(Event<MarketByPriceUpdate> const &) override;
+  void operator()(Event<MarketByOrderUpdate> const &) override;
 
   void operator()(Event<OrderAck> const &, cache::Order const &) override;
   void operator()(Event<OrderUpdate> const &, cache::Order const &) override;
-  void operator()(Event<TradeUpdate> const &, cache::Order const &) override;
+
+  void operator()(Event<PositionUpdate> const &) override;
+
+  // utils
 
   struct State final {
     bool ready = {};
@@ -47,12 +67,19 @@ struct Simple final : public strategy::Handler {
     Layer best;
   };
 
-  State &get_state(MessageInfo const &);
+  template <typename Callback>
+  void get_state(MessageInfo const &, Callback callback);
+
+  template <typename T>
+  State &get_state(Event<T> const &);
 
  private:
   Dispatcher &dispatcher_;
-  Config const config_;
+  // config
+  std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, size_t>>> const lookup_;
+  // cache
   Cache &cache_;
+  // state
   std::vector<State> state_;
 };
 
