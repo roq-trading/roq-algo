@@ -214,12 +214,25 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
           .commission_quantity = NaN,
           .commission_currency = {},
       };
-      dispatch_trade_update(message_info, order, fill);
       order.order_status = OrderStatus::COMPLETED;
+      order.remaining_quantity = 0.0;
+      order.traded_quantity = fill.quantity;
+      order.average_traded_price = fill.price;
+      order.last_traded_quantity = fill.quantity;
+      order.last_traded_price = fill.price;
+      order.last_liquidity = fill.liquidity;
+      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
+      dispatch_trade_update(message_info, order, fill);
     } else {
       order.order_status = OrderStatus::WORKING;
+      order.remaining_quantity = create_order.quantity;
+      order.traded_quantity = 0.0;
+      order.average_traded_price = NaN;
+      order.last_traded_quantity = NaN;
+      order.last_traded_price = NaN;
+      order.last_liquidity = {};
+      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
     }
-    dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
   }
 }
 
@@ -275,9 +288,15 @@ void Simple::operator()(Event<Layer> const &event) {
         .commission_quantity = NaN,
         .commission_currency = {},
     };
-    dispatch_trade_update(message_info, order, fill);
     order.order_status = OrderStatus::COMPLETED;
+    order.remaining_quantity = 0.0;
+    order.traded_quantity = fill.quantity;
+    order.average_traded_price = fill.price;
+    order.last_traded_quantity = fill.quantity;
+    order.last_traded_price = fill.price;
+    order.last_liquidity = fill.liquidity;
     dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
+    dispatch_trade_update(message_info, order, fill);
   };
   auto bid = convert(layer.bid_price, std::numeric_limits<int64_t>::min());
   if (utils::update(best_.units.first, bid)) {
