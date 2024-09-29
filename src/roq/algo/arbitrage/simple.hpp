@@ -38,6 +38,14 @@ struct Simple final : public strategy::Handler {
 
   Simple(Simple const &) = delete;
 
+  struct State final {
+    bool ready = {};
+    double tick_size = NaN;
+    std::chrono::nanoseconds exchange_time_utc = {};
+    TradingStatus trading_status = {};
+    Layer best;
+  };
+
  protected:
   void operator()(Event<Disconnected> const &) override;
 
@@ -60,23 +68,21 @@ struct Simple final : public strategy::Handler {
 
   // utils
 
-  struct State final {
-    bool ready = {};
-    double tick_size = NaN;
-    TradingStatus trading_status = {};
-    Layer best;
-  };
-
   template <typename Callback>
-  void get_state(MessageInfo const &, Callback callback);
+  void get_all_states(MessageInfo const &, Callback);
 
-  template <typename T>
-  State &get_state(Event<T> const &);
+  template <typename T, typename Callback>
+  bool get_state(Event<T> const &, Callback);
+
+  bool can_trade() const;
+
+  void update();
 
  private:
   Dispatcher &dispatcher_;
   // config
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, size_t>>> const lookup_;
+  std::chrono::nanoseconds const max_age_ = {};
   // cache
   Cache &cache_;
   // state
@@ -86,3 +92,25 @@ struct Simple final : public strategy::Handler {
 }  // namespace arbitrage
 }  // namespace algo
 }  // namespace roq
+
+template <>
+struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::arbitrage::Simple::State const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(ready={}, )"
+        R"(tick_size={}, )"
+        R"(exchange_time_utc={}, )"
+        R"(trading_status={}, )"
+        R"(best={})"
+        R"(}})"sv,
+        value.ready,
+        value.tick_size,
+        value.exchange_time_utc,
+        value.trading_status,
+        value.best);
+  }
+};

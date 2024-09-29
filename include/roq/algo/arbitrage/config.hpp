@@ -4,8 +4,10 @@
 
 #include "roq/compat.hpp"
 
+#include <chrono>
 #include <span>
 
+#include <fmt/chrono.h>
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
@@ -17,6 +19,7 @@ namespace arbitrage {
 
 struct ROQ_PUBLIC Config final {
   std::span<Instrument const> instruments;
+  std::chrono::nanoseconds max_age = {};  // when exchange doesn't support trading status
 };
 
 }  // namespace arbitrage
@@ -31,8 +34,10 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(instruments=[{}])"
+        R"(instruments=[{}], )"
+        R"(max_age={})"
         R"(}})"sv,
-        fmt::join(value.instruments, ", "sv));
+        fmt::join(value.instruments, ", "sv),
+        value.max_age);
   }
 };
