@@ -33,7 +33,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
           .exchange = "deribit"sv,
           .symbol = "BTC-PERPETUAL"sv,
       },
-      .source = algo::matcher::Source::TOP_OF_BOOK,
+      .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
   for (auto _ : state) {
     auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, cache);

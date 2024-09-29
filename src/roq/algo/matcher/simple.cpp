@@ -88,7 +88,7 @@ void try_match_helper(auto &container, auto compare, auto best, auto &cache, Cal
 // === IMPLEMENTATION ===
 
 Simple::Simple(Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, source_{config.source}, cache_{cache}, market_by_price_{create_market_by_price(config.instrument)},
+    : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, cache_{cache}, market_by_price_{create_market_by_price(config.instrument)},
       market_by_order_{create_market_by_order(config.instrument)} {
 }
 
@@ -122,7 +122,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   if (!top_of_book_(event))
     return;
-  if (source_ != Source::TOP_OF_BOOK)
+  if (market_data_source_ != MarketDataSource::TOP_OF_BOOK)
     return;
   if (std::isnan(tick_size_))  // note! reference data not yet received
     return;
@@ -135,7 +135,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   (*market_by_price_)(event);
-  if (source_ != Source::MARKET_BY_PRICE)
+  if (market_data_source_ != MarketDataSource::MARKET_BY_PRICE)
     return;
   Layer layer;
   (*market_by_price_).extract({&layer, 1}, true);
@@ -148,7 +148,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
   (*market_by_order_)(event);
-  if (source_ != Source::MARKET_BY_ORDER)
+  if (market_data_source_ != MarketDataSource::MARKET_BY_ORDER)
     return;
   Layer layer;
   (*market_by_order_).extract_2({&layer, 1});

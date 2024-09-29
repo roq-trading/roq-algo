@@ -7,8 +7,7 @@
 #include <fmt/core.h>
 
 #include "roq/algo/instrument.hpp"
-
-#include "roq/algo/matcher/source.hpp"
+#include "roq/algo/market_data_source.hpp"
 
 namespace roq {
 namespace algo {
@@ -16,7 +15,7 @@ namespace matcher {
 
 struct ROQ_PUBLIC Config final {
   Instrument instrument;
-  Source source = {};
+  MarketDataSource market_data_source = {};
 };
 
 }  // namespace matcher
@@ -32,9 +31,9 @@ struct fmt::formatter<roq::algo::matcher::Config> {
         context.out(),
         R"({{)"
         R"(instrument={}, )"
-        R"(source={})"
+        R"(market_data_source={})"
         R"(}})"sv,
         value.instrument,
-        value.source);
+        value.market_data_source);
   }
 };

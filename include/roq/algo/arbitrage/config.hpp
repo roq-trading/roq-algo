@@ -12,6 +12,7 @@
 #include <fmt/ranges.h>
 
 #include "roq/algo/instrument.hpp"
+#include "roq/algo/market_data_source.hpp"
 
 namespace roq {
 namespace algo {
@@ -19,6 +20,7 @@ namespace arbitrage {
 
 struct ROQ_PUBLIC Config final {
   std::span<Instrument const> instruments;
+  MarketDataSource market_data_source = {};
   std::chrono::nanoseconds max_age = {};  // when exchange doesn't support trading status
 };
 
@@ -35,9 +37,11 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
         context.out(),
         R"({{)"
         R"(instruments=[{}], )"
+        R"(market_data_source={}, )"
         R"(max_age={})"
         R"(}})"sv,
         fmt::join(value.instruments, ", "sv),
+        value.market_data_source,
         value.max_age);
   }
 };

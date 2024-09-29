@@ -11,6 +11,7 @@
 #include "roq/cache/top_of_book.hpp"
 
 #include "roq/algo/cache.hpp"
+#include "roq/algo/market_data_source.hpp"
 
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
@@ -80,7 +81,7 @@ struct Simple final : public Handler {
  private:
   Dispatcher &dispatcher_;
   // config
-  Source const source_;
+  MarketDataSource const market_data_source_;
   // cache
   Cache &cache_;
   // market

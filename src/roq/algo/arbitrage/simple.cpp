@@ -51,8 +51,8 @@ auto create_state(auto &config) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, lookup_{create_lookup<decltype(lookup_)>(config)}, max_age_{config.max_age}, cache_{cache},
-      state_{create_state<decltype(state_)>(config)} {
+    : dispatcher_{dispatcher}, lookup_{create_lookup<decltype(lookup_)>(config)}, market_data_source_{config.market_data_source}, max_age_{config.max_age},
+      cache_{cache}, state_{create_state<decltype(state_)>(config)} {
   assert(!std::empty(lookup_));
   assert(std::size(state_) == std::size(lookup_));
 }
@@ -73,19 +73,15 @@ void Simple::operator()(Event<Ready> const &event) {
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
-  auto callback = [&](auto &state) {
-    utils::update(state.tick_size, reference_data.tick_size);
-    // log::debug("state={}"sv, state);
-  };
+  auto callback = [&](auto &state) { utils::update(state.tick_size, reference_data.tick_size); };
   get_state(event, callback);
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   auto &[message_info, market_status] = event;
   auto callback = [&](auto &state) {
-    utils::update(state.trading_status, market_status.trading_status);
     utils::update_max(state.exchange_time_utc, market_status.exchange_time_utc);
-    // log::debug("state={}"sv, state);
+    utils::update(state.trading_status, market_status.trading_status);
     update();
   };
   get_state(event, callback);
@@ -94,20 +90,45 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &state) {
-    utils::update(state.best, top_of_book.layer);
     utils::update_max(state.exchange_time_utc, top_of_book.exchange_time_utc);
-    // log::debug("state={}"sv, state);
+    if (market_data_source_ == MarketDataSource::TOP_OF_BOOK)
+      utils::update(state.best, top_of_book.layer);
     update();
   };
   get_state(event, callback);
 }
 
-void Simple::operator()(Event<MarketByPriceUpdate> const &) {
-  // XXX TODO implement
+void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
+  auto &[message_info, market_by_price_update] = event;
+  auto callback = [&](auto &state) {
+    utils::update_max(state.exchange_time_utc, market_by_price_update.exchange_time_utc);
+    if (market_data_source_ == MarketDataSource::MARKET_BY_PRICE) {
+      // XXX TODO implement
+    }
+    update();
+  };
+  get_state(event, callback);
 }
 
-void Simple::operator()(Event<MarketByOrderUpdate> const &) {
-  // XXX TODO implement
+void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
+  auto &[message_info, market_by_order_update] = event;
+  auto callback = [&](auto &state) {
+    utils::update_max(state.exchange_time_utc, market_by_order_update.exchange_time_utc);
+    if (market_data_source_ == MarketDataSource::MARKET_BY_ORDER) {
+      // XXX TODO implement
+    }
+    update();
+  };
+  get_state(event, callback);
+}
+
+void Simple::operator()(Event<TradeSummary> const &event) {
+  auto &[message_info, trade_summary] = event;
+  auto callback = [&](auto &state) {
+    utils::update_max(state.exchange_time_utc, trade_summary.exchange_time_utc);
+    update();
+  };
+  get_state(event, callback);
 }
 
 void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
@@ -122,6 +143,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
 
 void Simple::operator()(Event<PositionUpdate> const &event) {
   auto &[message_info, position_update] = event;
+  log::fatal("DEBUG {}"sv, position_update);
   // auto &state = get_state(event);
 }
 
@@ -174,6 +196,7 @@ bool Simple::can_trade() const {
 }
 
 void Simple::update() {
+  // log::debug("state={}"sv, state);
   if (!can_trade()) {
     // XXX TODO try-cancel working orders?
     return;

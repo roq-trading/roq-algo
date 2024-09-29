@@ -7,6 +7,7 @@
 #include "roq/utils/container.hpp"
 
 #include "roq/algo/cache.hpp"
+#include "roq/algo/market_data_source.hpp"
 
 #include "roq/algo/strategy/dispatcher.hpp"
 #include "roq/algo/strategy/handler.hpp"
@@ -41,7 +42,7 @@ struct Simple final : public strategy::Handler {
   struct State final {
     bool ready = {};
     double tick_size = NaN;
-    std::chrono::nanoseconds exchange_time_utc = {};
+    std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
   };
@@ -60,6 +61,7 @@ struct Simple final : public strategy::Handler {
   void operator()(Event<TopOfBook> const &) override;
   void operator()(Event<MarketByPriceUpdate> const &) override;
   void operator()(Event<MarketByOrderUpdate> const &) override;
+  void operator()(Event<TradeSummary> const &) override;
 
   void operator()(Event<OrderAck> const &, cache::Order const &) override;
   void operator()(Event<OrderUpdate> const &, cache::Order const &) override;
@@ -82,11 +84,12 @@ struct Simple final : public strategy::Handler {
   Dispatcher &dispatcher_;
   // config
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, size_t>>> const lookup_;
-  std::chrono::nanoseconds const max_age_ = {};
+  MarketDataSource const market_data_source_;
+  std::chrono::nanoseconds const max_age_;
   // cache
   Cache &cache_;
   // state
-  std::vector<State> state_;
+  std::vector<State> state_;  // XXX FIXME rename... leg? instrument?
 };
 
 }  // namespace arbitrage

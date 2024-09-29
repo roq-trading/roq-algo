@@ -33,7 +33,7 @@ TEST_CASE("simple", "[algo/matcher]") {
           .exchange = "deribit"sv,
           .symbol = "BTC-PERPETUAL"sv,
       },
-      .source = algo::matcher::Source::TOP_OF_BOOK,
+      .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
   auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, cache);
   CHECK((1 + 1) == 2);
