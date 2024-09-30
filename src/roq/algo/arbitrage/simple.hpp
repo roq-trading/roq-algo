@@ -6,6 +6,9 @@
 
 #include "roq/utils/container.hpp"
 
+#include "roq/cache/market_by_order.hpp"
+#include "roq/cache/market_by_price.hpp"
+
 #include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
 
@@ -48,6 +51,8 @@ struct Simple final : public strategy::Handler {
     std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
+    std::unique_ptr<cache::MarketByPrice> market_by_price;
+    std::unique_ptr<cache::MarketByOrder> market_by_order;
   };
 
   struct Instrument final {
@@ -63,7 +68,6 @@ struct Simple final : public strategy::Handler {
 
   void operator()(Event<Disconnected> const &) override;
 
-  void operator()(Event<DownloadBegin> const &) override;
   void operator()(Event<DownloadEnd> const &) override;
 
   void operator()(Event<Ready> const &) override;
@@ -106,11 +110,13 @@ struct Simple final : public strategy::Handler {
   // config
   std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
   SupportType const market_data_type_;
+  std::string const account_;
   // cache
   Cache &cache_;
   // state
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;
+  uint64_t max_order_id_ = {};
 };
 
 }  // namespace arbitrage

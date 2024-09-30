@@ -6,6 +6,10 @@
 
 #include "roq/utils/update.hpp"
 
+#include "roq/market/mbp/factory.hpp"
+
+#include "roq/market/mbo/factory.hpp"
+
 #include "roq/algo/utils/common.hpp"
 
 using namespace std::literals;
@@ -14,9 +18,23 @@ namespace roq {
 namespace algo {
 namespace arbitrage {
 
+// === CONSTANTS ===
+
+namespace {
+auto const ACCOUNT = "A1"sv;  // XXX FIXME TODO from config
+}
+
 // === HELPERS ===
 
 namespace {
+auto create_market_by_price(auto &instrument) {
+  return market::mbp::Factory::create(instrument.exchange, instrument.symbol);
+}
+
+auto create_market_by_order(auto &instrument) {
+  return market::mbo::Factory::create(instrument.exchange, instrument.symbol);
+}
+
 template <typename R>
 auto create_instruments(auto &config) {
   using result_type = std::remove_cvref<R>::type;
@@ -27,11 +45,14 @@ auto create_instruments(auto &config) {
     log::fatal("Unexpected: len(config.instruments)={}"sv, size);
   for (size_t i = 0; i < size; ++i) {
     auto &item = config.instruments[i];
+    Simple::State state;
+    state.market_by_price = create_market_by_price(item);
+    state.market_by_order = create_market_by_order(item);
     auto instrument = Simple::Instrument{
         .source = item.source,
         .exchange{item.exchange},
         .symbol{item.symbol},
-        .state = {},
+        .state{std::move(state)},
     };
     log::info("[{}] instrument={}"sv, i, instrument);
     result.emplace_back(std::move(instrument));
@@ -65,7 +86,7 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, cache_{cache},
+    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, account_{ACCOUNT}, cache_{cache},
       instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
@@ -82,16 +103,22 @@ void Simple::operator()(Event<Disconnected> const &event) {
 void Simple::operator()(Event<DownloadBegin> const &) {
 }
 
-void Simple::operator()(Event<DownloadEnd> const &) {
+void Simple::operator()(Event<DownloadEnd> const &event) {
+  auto &[message_info, download_end] = event;
+  if (download_end.account == account_)
+    max_order_id_ = std::max(download_end.max_order_id, max_order_id_);
 }
 
 void Simple::operator()(Event<Ready> const &event) {
   get_all_states(event, [](auto &state) { state.ready = true; });
+  log::info("max_order_id={}"sv, max_order_id_);
+  log::info("*** READY ***"sv);
 }
 
 void Simple::operator()(Event<StreamStatus> const &event) {
   auto &[message_info, stream_status] = event;
   auto market_data = [&]() {
+    // ...
     // XXX FIXME TODO we need better identification of the primary feed
     if (stream_status.supports.has(market_data_type_) && stream_status.priority == Priority::PRIMARY)
       return true;
@@ -112,6 +139,11 @@ void Simple::operator()(Event<StreamStatus> const &event) {
 // XXX FIXME TODO this is the real update (**NOT** correlated with latency assumptions)
 void Simple::operator()(Event<ExternalLatency> const &event) {
   auto &[message_info, external_latency] = event;
+  auto &source = sources_[message_info.source];
+  assert(external_latency.stream_id > 0);
+  source.stream_latency.resize(std::max<size_t>(external_latency.stream_id, std::size(source.stream_latency)));
+  source.stream_latency[external_latency.stream_id - 1] = external_latency.latency;  // XXX TODO smooth
+  // ...
   get_all_states(event, [&](auto &state) {
     if (state.stream_id == external_latency.stream_id)
       state.latency = external_latency.latency;  // XXX TODO smooth
@@ -120,7 +152,11 @@ void Simple::operator()(Event<ExternalLatency> const &event) {
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
-  auto callback = [&](auto &state) { roq::utils::update(state.tick_size, reference_data.tick_size); };
+  auto callback = [&](auto &state) {
+    roq::utils::update(state.tick_size, reference_data.tick_size);
+    (*state.market_by_price)(event);
+    (*state.market_by_order)(event);
+  };
   get_state(event, callback);
 }
 
@@ -149,9 +185,9 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
   auto callback = [&](auto &state) {
     roq::utils::update_max(state.exchange_time_utc, market_by_price_update.exchange_time_utc);
-    if (market_data_type_ == SupportType::MARKET_BY_PRICE) {
-      // XXX TODO implement
-    }
+    (*state.market_by_price)(event);
+    if (market_data_type_ == SupportType::MARKET_BY_PRICE)
+      (*state.market_by_price).extract({&state.best, 1}, true);
     update();
   };
   get_state(event, callback);
@@ -161,9 +197,9 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto &[message_info, market_by_order_update] = event;
   auto callback = [&](auto &state) {
     roq::utils::update_max(state.exchange_time_utc, market_by_order_update.exchange_time_utc);
-    if (market_data_type_ == SupportType::MARKET_BY_ORDER) {
-      // XXX TODO implement
-    }
+    (*state.market_by_order)(event);
+    if (market_data_type_ == SupportType::MARKET_BY_ORDER)
+      (*state.market_by_order).extract_2({&state.best, 1});
     update();
   };
   get_state(event, callback);
