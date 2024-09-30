@@ -42,18 +42,25 @@ struct Simple final : public strategy::Handler {
   struct State final {
     bool ready = {};
     double tick_size = NaN;
+    uint16_t stream_id = {};                          // market data stream
+    std::chrono::nanoseconds latency = {};            // latest market data latency
     std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
   };
 
  protected:
+  void operator()(Event<Timer> const &) override;
+
   void operator()(Event<Disconnected> const &) override;
 
   void operator()(Event<DownloadBegin> const &) override;
   void operator()(Event<DownloadEnd> const &) override;
 
   void operator()(Event<Ready> const &) override;
+
+  void operator()(Event<StreamStatus> const &) override;
+  void operator()(Event<ExternalLatency> const &) override;
 
   void operator()(Event<ReferenceData> const &) override;
   void operator()(Event<MarketStatus> const &) override;
@@ -84,8 +91,8 @@ struct Simple final : public strategy::Handler {
   Dispatcher &dispatcher_;
   // config
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, size_t>>> const lookup_;
-  MarketDataSource const market_data_source_;
   std::chrono::nanoseconds const max_age_;
+  SupportType const support_type_;
   // cache
   Cache &cache_;
   // state

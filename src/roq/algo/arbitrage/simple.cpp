@@ -6,6 +6,8 @@
 
 #include "roq/utils/update.hpp"
 
+#include "roq/algo/utils/common.hpp"
+
 using namespace std::literals;
 
 namespace roq {
@@ -42,7 +44,7 @@ auto create_state(auto &config) {
   result_type result;
   auto size = std::size(config.instruments);
   if (size < 2)
-    log::fatal("Unexpected: size={}"sv, size);
+    log::fatal("Unexpected: len(config.instruments)={}"sv, size);
   result.resize(size);
   return result;
 }
@@ -51,10 +53,14 @@ auto create_state(auto &config) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, lookup_{create_lookup<decltype(lookup_)>(config)}, market_data_source_{config.market_data_source}, max_age_{config.max_age},
-      cache_{cache}, state_{create_state<decltype(state_)>(config)} {
+    : dispatcher_{dispatcher}, lookup_{create_lookup<decltype(lookup_)>(config)}, max_age_{config.max_age},
+      support_type_{utils::to_support_type(config.market_data_source)}, cache_{cache}, state_{create_state<decltype(state_)>(config)} {
   assert(!std::empty(lookup_));
   assert(std::size(state_) == std::size(lookup_));
+}
+
+void Simple::operator()(Event<Timer> const &) {
+  // XXX TODO process delayed order requests
 }
 
 void Simple::operator()(Event<Disconnected> const &event) {
@@ -71,17 +77,47 @@ void Simple::operator()(Event<Ready> const &event) {
   get_all_states(event, [](auto &state) { state.ready = true; });
 }
 
+void Simple::operator()(Event<StreamStatus> const &event) {
+  auto &[message_info, stream_status] = event;
+  auto market_data = [&]() {
+    // XXX FIXME TODO we need a clear identification of the primary feed
+    if (stream_status.supports.has(support_type_) && stream_status.priority == Priority::PRIMARY)
+      return true;
+    return false;
+  }();
+  auto order_management = [&]() {
+    if (stream_status.supports.has(SupportType::CREATE_ORDER))
+      return true;
+    return false;
+  }();
+  if (market_data || order_management)
+    get_all_states(event, [&](auto &state) {
+      if (market_data)  // XXX FIXME TODO only market data, for now
+        state.stream_id = stream_status.stream_id;
+    });
+}
+
+// XXX FIXME TODO should be simulated
+void Simple::operator()(Event<ExternalLatency> const &event) {
+  assert(false);  // not yet implemented...
+  auto &[message_info, external_latency] = event;
+  get_all_states(event, [&](auto &state) {
+    if (state.stream_id == external_latency.stream_id)
+      state.latency = external_latency.latency;  // XXX TODO smooth
+  });
+}
+
 void Simple::operator()(Event<ReferenceData> const &event) {
   auto &[message_info, reference_data] = event;
-  auto callback = [&](auto &state) { utils::update(state.tick_size, reference_data.tick_size); };
+  auto callback = [&](auto &state) { roq::utils::update(state.tick_size, reference_data.tick_size); };
   get_state(event, callback);
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   auto &[message_info, market_status] = event;
   auto callback = [&](auto &state) {
-    utils::update_max(state.exchange_time_utc, market_status.exchange_time_utc);
-    utils::update(state.trading_status, market_status.trading_status);
+    roq::utils::update_max(state.exchange_time_utc, market_status.exchange_time_utc);
+    roq::utils::update(state.trading_status, market_status.trading_status);
     update();
   };
   get_state(event, callback);
@@ -90,9 +126,9 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &state) {
-    utils::update_max(state.exchange_time_utc, top_of_book.exchange_time_utc);
-    if (market_data_source_ == MarketDataSource::TOP_OF_BOOK)
-      utils::update(state.best, top_of_book.layer);
+    roq::utils::update_max(state.exchange_time_utc, top_of_book.exchange_time_utc);
+    if (support_type_ == SupportType::TOP_OF_BOOK)
+      roq::utils::update(state.best, top_of_book.layer);
     update();
   };
   get_state(event, callback);
@@ -101,8 +137,8 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
   auto callback = [&](auto &state) {
-    utils::update_max(state.exchange_time_utc, market_by_price_update.exchange_time_utc);
-    if (market_data_source_ == MarketDataSource::MARKET_BY_PRICE) {
+    roq::utils::update_max(state.exchange_time_utc, market_by_price_update.exchange_time_utc);
+    if (support_type_ == SupportType::MARKET_BY_PRICE) {
       // XXX TODO implement
     }
     update();
@@ -113,8 +149,8 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto &[message_info, market_by_order_update] = event;
   auto callback = [&](auto &state) {
-    utils::update_max(state.exchange_time_utc, market_by_order_update.exchange_time_utc);
-    if (market_data_source_ == MarketDataSource::MARKET_BY_ORDER) {
+    roq::utils::update_max(state.exchange_time_utc, market_by_order_update.exchange_time_utc);
+    if (support_type_ == SupportType::MARKET_BY_ORDER) {
       // XXX TODO implement
     }
     update();
@@ -125,7 +161,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
 void Simple::operator()(Event<TradeSummary> const &event) {
   auto &[message_info, trade_summary] = event;
   auto callback = [&](auto &state) {
-    utils::update_max(state.exchange_time_utc, trade_summary.exchange_time_utc);
+    roq::utils::update_max(state.exchange_time_utc, trade_summary.exchange_time_utc);
     update();
   };
   get_state(event, callback);
@@ -143,6 +179,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
 
 void Simple::operator()(Event<PositionUpdate> const &event) {
   auto &[message_info, position_update] = event;
+  assert(false);  // not yet implemented...
   log::fatal("DEBUG {}"sv, position_update);
   // auto &state = get_state(event);
 }
