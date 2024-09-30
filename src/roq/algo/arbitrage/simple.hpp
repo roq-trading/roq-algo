@@ -37,6 +37,7 @@ struct Simple final : public strategy::Handler {
 
   Simple(Dispatcher &, Config const &, Cache &);
 
+  Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
 
   struct State final {
@@ -47,6 +48,14 @@ struct Simple final : public strategy::Handler {
     std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
+  };
+
+  struct Instrument final {
+    uint8_t const source = {};
+    std::string const exchange;
+    std::string const symbol;
+    // private:
+    State state;
   };
 
  protected:
@@ -87,16 +96,21 @@ struct Simple final : public strategy::Handler {
 
   void update();
 
+  struct Source final {
+    utils::unordered_map<std::string_view, utils::unordered_map<std::string_view, size_t>> const lookup;
+    std::vector<std::chrono::nanoseconds> stream_latency;
+  };
+
  private:
   Dispatcher &dispatcher_;
   // config
-  std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, size_t>>> const lookup_;
-  std::chrono::nanoseconds const max_age_;
-  SupportType const support_type_;
+  std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
+  SupportType const market_data_type_;
   // cache
   Cache &cache_;
   // state
-  std::vector<State> state_;  // XXX FIXME rename... leg? instrument?
+  std::vector<Instrument> instruments_;
+  std::vector<Source> sources_;
 };
 
 }  // namespace arbitrage
@@ -113,14 +127,38 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         R"({{)"
         R"(ready={}, )"
         R"(tick_size={}, )"
+        R"(stream_id={}, )"
+        R"(latency={}, )"
         R"(exchange_time_utc={}, )"
         R"(trading_status={}, )"
         R"(best={})"
         R"(}})"sv,
         value.ready,
         value.tick_size,
+        value.stream_id,
+        value.latency,
         value.exchange_time_utc,
         value.trading_status,
         value.best);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::arbitrage::Simple::Instrument> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::arbitrage::Simple::Instrument const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(source={}, )"
+        R"(exchange="{}", )"
+        R"(symbol="{}", )"
+        R"(state={})"
+        R"(}})"sv,
+        value.source,
+        value.exchange,
+        value.symbol,
+        value.state);
   }
 };

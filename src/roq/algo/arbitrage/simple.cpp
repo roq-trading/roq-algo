@@ -18,34 +18,46 @@ namespace arbitrage {
 
 namespace {
 template <typename R>
-auto create_lookup(auto &config) {
+auto create_instruments(auto &config) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
-  auto size = [&]() {
-    size_t result = {};
-    for (auto &instrument : config.instruments)
-      result = std::max<size_t>(result, instrument.source);
-    return result + 1;
-  }();
+  auto size = std::size(config.instruments);
+  assert(size >= 2);
   if (size < 2)
     log::fatal("Unexpected: len(config.instruments)={}"sv, size);
-  result.resize(size);
-  for (size_t i = 0; i < std::size(config.instruments); ++i) {
-    auto &instrument = config.instruments[i];
+  for (size_t i = 0; i < size; ++i) {
+    auto &item = config.instruments[i];
+    auto instrument = Simple::Instrument{
+        .source = item.source,
+        .exchange{item.exchange},
+        .symbol{item.symbol},
+        .state = {},
+    };
     log::info("[{}] instrument={}"sv, i, instrument);
-    result[instrument.source][instrument.exchange][instrument.symbol] = i;
+    result.emplace_back(std::move(instrument));
   }
   return result;
 }
 
 template <typename R>
-auto create_state(auto &config) {
+auto create_sources(auto &instruments) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
-  auto size = std::size(config.instruments);
-  if (size < 2)
-    log::fatal("Unexpected: len(config.instruments)={}"sv, size);
-  result.resize(size);
+  auto max_source = [&]() {
+    size_t result = {};
+    for (auto &item : instruments)
+      result = std::max<size_t>(result, item.source);
+    return result;
+  }();
+  using lookup_type = std::remove_cvref<decltype(result_type::value_type::lookup)>::type;
+  std::vector<lookup_type> tmp;
+  tmp.resize(max_source + 1);
+  for (size_t i = 0; i < std::size(instruments); ++i) {
+    auto &item = instruments[i];
+    tmp[item.source][item.exchange][item.symbol] = i;
+  }
+  for (auto &item : tmp)
+    result.emplace_back(std::move(item));
   return result;
 }
 }  // namespace
@@ -53,10 +65,10 @@ auto create_state(auto &config) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, lookup_{create_lookup<decltype(lookup_)>(config)}, max_age_{config.max_age},
-      support_type_{utils::to_support_type(config.market_data_source)}, cache_{cache}, state_{create_state<decltype(state_)>(config)} {
-  assert(!std::empty(lookup_));
-  assert(std::size(state_) == std::size(lookup_));
+    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, cache_{cache},
+      instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
+  assert(!std::empty(instruments_));
+  assert(!std::empty(sources_));
 }
 
 void Simple::operator()(Event<Timer> const &) {
@@ -80,8 +92,8 @@ void Simple::operator()(Event<Ready> const &event) {
 void Simple::operator()(Event<StreamStatus> const &event) {
   auto &[message_info, stream_status] = event;
   auto market_data = [&]() {
-    // XXX FIXME TODO we need a clear identification of the primary feed
-    if (stream_status.supports.has(support_type_) && stream_status.priority == Priority::PRIMARY)
+    // XXX FIXME TODO we need better identification of the primary feed
+    if (stream_status.supports.has(market_data_type_) && stream_status.priority == Priority::PRIMARY)
       return true;
     return false;
   }();
@@ -97,9 +109,8 @@ void Simple::operator()(Event<StreamStatus> const &event) {
     });
 }
 
-// XXX FIXME TODO should be simulated
+// XXX FIXME TODO this is the real update (**NOT** correlated with latency assumptions)
 void Simple::operator()(Event<ExternalLatency> const &event) {
-  assert(false);  // not yet implemented...
   auto &[message_info, external_latency] = event;
   get_all_states(event, [&](auto &state) {
     if (state.stream_id == external_latency.stream_id)
@@ -127,7 +138,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &state) {
     roq::utils::update_max(state.exchange_time_utc, top_of_book.exchange_time_utc);
-    if (support_type_ == SupportType::TOP_OF_BOOK)
+    if (market_data_type_ == SupportType::TOP_OF_BOOK)
       roq::utils::update(state.best, top_of_book.layer);
     update();
   };
@@ -138,7 +149,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto &[message_info, market_by_price_update] = event;
   auto callback = [&](auto &state) {
     roq::utils::update_max(state.exchange_time_utc, market_by_price_update.exchange_time_utc);
-    if (support_type_ == SupportType::MARKET_BY_PRICE) {
+    if (market_data_type_ == SupportType::MARKET_BY_PRICE) {
       // XXX TODO implement
     }
     update();
@@ -150,7 +161,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto &[message_info, market_by_order_update] = event;
   auto callback = [&](auto &state) {
     roq::utils::update_max(state.exchange_time_utc, market_by_order_update.exchange_time_utc);
-    if (support_type_ == SupportType::MARKET_BY_ORDER) {
+    if (market_data_type_ == SupportType::MARKET_BY_ORDER) {
       // XXX TODO implement
     }
     update();
@@ -188,11 +199,11 @@ void Simple::operator()(Event<PositionUpdate> const &event) {
 
 template <typename Callback>
 void Simple::get_all_states(MessageInfo const &message_info, Callback callback) {
-  if (message_info.source < std::size(lookup_)) [[likely]] {
-    auto &tmp_1 = lookup_[message_info.source];
-    for (auto &[exchange, tmp_2] : tmp_1)
-      for (auto &[symbol, index] : tmp_2)
-        callback(state_[index]);
+  if (message_info.source < std::size(sources_)) [[likely]] {
+    auto &lookup = sources_[message_info.source].lookup;
+    for (auto &[exchange, tmp] : lookup)
+      for (auto &[symbol, index] : tmp)
+        callback(instruments_[index].state);
     return;
   }
   log::fatal(R"(Unexpected: source={})"sv, message_info.source);
@@ -201,14 +212,14 @@ void Simple::get_all_states(MessageInfo const &message_info, Callback callback) 
 template <typename T, typename Callback>
 bool Simple::get_state(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
-  if (message_info.source < std::size(lookup_)) [[likely]] {
-    auto &tmp_1 = lookup_[message_info.source];
-    auto iter_1 = tmp_1.find(value.exchange);
-    if (iter_1 != std::end(tmp_1)) {
+  if (message_info.source < std::size(sources_)) [[likely]] {
+    auto &lookup = sources_[message_info.source].lookup;
+    auto iter_1 = lookup.find(value.exchange);
+    if (iter_1 != std::end(lookup)) {
       auto &tmp_2 = (*iter_1).second;
       auto iter_2 = tmp_2.find(value.symbol);
       if (iter_2 != std::end(tmp_2)) {
-        callback(state_[(*iter_2).second]);
+        callback(instruments_[(*iter_2).second].state);
         return true;
       }
     }
@@ -225,7 +236,8 @@ bool Simple::can_trade() const {
     return (now - exchange_time_utc) < max_age_;
   };
   auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
-  for (auto &state : state_) {
+  for (auto &item : instruments_) {
+    auto &state = item.state;
     result &= is_active(state.trading_status, state.exchange_time_utc) && has_liquidity(state.best.bid_price, state.best.bid_quantity) &&
               has_liquidity(state.best.ask_price, state.best.ask_quantity);
   }
@@ -233,15 +245,16 @@ bool Simple::can_trade() const {
 }
 
 void Simple::update() {
-  // log::debug("state={}"sv, state);
+  for (size_t i = 0; i < std::size(instruments_); ++i)
+    log::debug("[{}] instrument={}"sv, i, instruments_[i]);
   if (!can_trade()) {
     // XXX TODO try-cancel working orders?
     return;
   }
-  for (size_t i = 0; i < (std::size(state_) - 1); ++i) {
-    auto &lhs = state_[i];
-    for (size_t j = i + 1; j < std::size(state_); ++j) {
-      auto &rhs = state_[j];
+  for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
+    auto &lhs = instruments_[i].state;
+    for (size_t j = i + 1; j < std::size(instruments_); ++j) {
+      auto &rhs = instruments_[j].state;
       auto spread_1 = lhs.best.bid_price - rhs.best.ask_price;
       auto spread_2 = rhs.best.bid_price - lhs.best.ask_price;
       log::debug("[{}][{}] {} {}"sv, i, j, spread_1, spread_2);
