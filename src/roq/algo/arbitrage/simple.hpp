@@ -34,6 +34,8 @@ namespace arbitrage {
 // - max position
 // - latency
 // - liquid vs illiquid leg?
+// - multiplier (compare real size)
+// - threshold
 
 struct Simple final : public strategy::Handler {
   using Dispatcher = strategy::Dispatcher;
@@ -46,8 +48,8 @@ struct Simple final : public strategy::Handler {
   struct State final {
     bool ready = {};
     double tick_size = NaN;
-    uint16_t stream_id = {};                          // market data stream
-    std::chrono::nanoseconds latency = {};            // latest market data latency
+    double multiplier = NaN;
+    double min_trade_vol = NaN;
     std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
@@ -59,6 +61,7 @@ struct Simple final : public strategy::Handler {
     uint8_t const source = {};
     std::string const exchange;
     std::string const symbol;
+    std::string const account;
     // private:
     State state;
   };
@@ -74,6 +77,8 @@ struct Simple final : public strategy::Handler {
 
   void operator()(Event<StreamStatus> const &) override;
   void operator()(Event<ExternalLatency> const &) override;
+
+  void operator()(Event<GatewayStatus> const &) override;
 
   void operator()(Event<ReferenceData> const &) override;
   void operator()(Event<MarketStatus> const &) override;
@@ -91,10 +96,10 @@ struct Simple final : public strategy::Handler {
   // utils
 
   template <typename Callback>
-  void get_all_states(MessageInfo const &, Callback);
+  void get_instruments_by_source(MessageInfo const &, Callback);
 
   template <typename T, typename Callback>
-  bool get_state(Event<T> const &, Callback);
+  bool get_instrument(Event<T> const &, Callback);
 
   bool can_trade() const;
 
@@ -102,7 +107,10 @@ struct Simple final : public strategy::Handler {
 
   struct Source final {
     utils::unordered_map<std::string_view, utils::unordered_map<std::string_view, size_t>> const lookup;
+    utils::unordered_set<std::string_view> const accounts;
+    bool ready = {};
     std::vector<std::chrono::nanoseconds> stream_latency;
+    roq::Mask<roq::SupportType> available;
   };
 
  private:
@@ -110,7 +118,6 @@ struct Simple final : public strategy::Handler {
   // config
   std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
   SupportType const market_data_type_;
-  std::string const account_;
   // cache
   Cache &cache_;
   // state
@@ -133,16 +140,16 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         R"({{)"
         R"(ready={}, )"
         R"(tick_size={}, )"
-        R"(stream_id={}, )"
-        R"(latency={}, )"
+        R"(multiplier={}, )"
+        R"(min_trade_vol={}, )"
         R"(exchange_time_utc={}, )"
         R"(trading_status={}, )"
         R"(best={})"
         R"(}})"sv,
         value.ready,
         value.tick_size,
-        value.stream_id,
-        value.latency,
+        value.multiplier,
+        value.min_trade_vol,
         value.exchange_time_utc,
         value.trading_status,
         value.best);
@@ -160,11 +167,13 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::Instrument> {
         R"(source={}, )"
         R"(exchange="{}", )"
         R"(symbol="{}", )"
+        R"(account="{}", )"
         R"(state={})"
         R"(}})"sv,
         value.source,
         value.exchange,
         value.symbol,
+        value.account,
         value.state);
   }
 };

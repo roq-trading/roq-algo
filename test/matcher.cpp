@@ -32,6 +32,7 @@ TEST_CASE("simple", "[algo/matcher]") {
           .source = 0,
           .exchange = "deribit"sv,
           .symbol = "BTC-PERPETUAL"sv,
+          .account = {},
       },
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };

@@ -15,6 +15,7 @@ struct ROQ_PUBLIC Instrument final {
   uint8_t source = {};
   std::string_view exchange;
   std::string_view symbol;
+  std::string_view account;
 };
 
 }  // namespace algo
@@ -29,11 +30,13 @@ struct fmt::formatter<roq::algo::Instrument> {
         context.out(),
         R"({{)"
         R"(source={}, )"
-        R"(exchange={}, )"
-        R"(symbol={})"
+        R"(exchange="{}", )"
+        R"(symbol="{}", )"
+        R"(account="{}")"
         R"(}})"sv,
         value.source,
         value.exchange,
-        value.symbol);
+        value.symbol,
+        value.account);
   }
 };

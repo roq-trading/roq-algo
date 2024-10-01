@@ -32,6 +32,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
           .source = 0,
           .exchange = "deribit"sv,
           .symbol = "BTC-PERPETUAL"sv,
+          .account = {},
       },
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
