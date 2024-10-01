@@ -4,6 +4,7 @@
 
 #include "roq/logging.hpp"
 
+#include "roq/utils/common.hpp"
 #include "roq/utils/update.hpp"
 
 #include "roq/market/mbp/factory.hpp"
@@ -65,27 +66,26 @@ auto create_sources(auto &instruments) {
       result = std::max<size_t>(result, item.source);
     return result;
   }();
-  // instruments
-  using instruments_type = std::remove_cvref<decltype(result_type::value_type::instruments)>::type;
-  std::vector<instruments_type> tmp_1;
-  tmp_1.resize(max_source + 1);
-  for (size_t i = 0; i < std::size(instruments); ++i) {
-    auto &item = instruments[i];
-    tmp_1[item.source][item.exchange][item.symbol] = i;
-  }
+  auto size = max_source + 1;
   // accounts
   using accounts_type = std::remove_cvref<decltype(result_type::value_type::accounts)>::type;
-  std::vector<accounts_type> tmp_2;
-  tmp_2.resize(max_source + 1);
+  std::vector<accounts_type> tmp_1(size);
   for (size_t i = 0; i < std::size(instruments); ++i) {
     auto &item = instruments[i];
-    tmp_2[item.source].emplace(item.account);
+    tmp_1[item.source].try_emplace(item.account);
+  }
+  // instruments
+  using instruments_type = std::remove_cvref<decltype(result_type::value_type::instruments)>::type;
+  std::vector<instruments_type> tmp_2(size);
+  for (size_t i = 0; i < std::size(instruments); ++i) {
+    auto &item = instruments[i];
+    tmp_2[item.source][item.exchange][item.symbol] = i;
   }
   // source
-  for (size_t i = 0; i < (max_source + 1); ++i) {
-    auto &instruments = tmp_1[i];
-    auto &accounts = tmp_2[i];
-    result.emplace_back(std::move(instruments), std::move(accounts));
+  for (size_t i = 0; i < size; ++i) {
+    auto &accounts = tmp_1[i];
+    auto &instruments = tmp_2[i];
+    result.emplace_back(std::move(accounts), std::move(instruments));
   }
   return result;
 }
@@ -94,9 +94,9 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, threshold_{config.threshold},
-      quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0}, cache_{cache},
-      instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
+    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)},
+      threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
+      cache_{cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }
@@ -107,12 +107,16 @@ void Simple::operator()(Event<Timer> const &) {
 
 void Simple::operator()(Event<Disconnected> const &event) {
   auto &[message_info, disconnected] = event;
-  auto callback = [](auto &instrument) { instrument.state = {}; };
-  get_instruments_by_source(event, callback);
+  // reset source
   auto &source = sources_[message_info.source];
   source.ready = false;
-  source.available = {};
-  log::info("DEBUG [{}] ready={}"sv, message_info.source, source.ready);
+  for (auto &[name, account] : source.accounts)
+    account.has_download_orders = {};
+  // note! no need to reset stream latencies
+  // XXX FIXME TODO what about working orders ???
+  // reset instruments
+  auto callback = [](auto &instrument) { instrument.state = {}; };
+  get_instruments_by_source(event, callback);
 }
 
 void Simple::operator()(Event<DownloadEnd> const &event) {
@@ -124,39 +128,52 @@ void Simple::operator()(Event<DownloadEnd> const &event) {
 
 void Simple::operator()(Event<Ready> const &event) {
   auto &[message_info, ready] = event;
-  auto callback = [](auto &instrument) { instrument.state.ready = true; };
-  get_instruments_by_source(event, callback);
   auto &source = sources_[message_info.source];
   source.ready = true;
-  log::info("DEBUG max_order_id={}"sv, max_order_id_);
-  log::info("DEBUG [{}] available={}"sv, message_info.source, source.available);
-  log::info("DEBUG [{}] ready={}"sv, message_info.source, source.ready);
+  for (auto &[name, account] : source.accounts)
+    if (account.has_download_orders) {
+      // XXX FIXME TODO iterate by exchange/symbol
+      auto cancel_all_orders = CancelAllOrders{
+          .account = name,
+          .order_id = {},
+          .exchange = {},
+          .symbol = {},
+          .strategy_id = strategy_id_,
+          .side = {},
+      };
+      try {
+        log::debug("cancel_all_orders={}, source={}"sv, cancel_all_orders, message_info.source);
+        dispatcher_.send(cancel_all_orders, message_info.source);
+      } catch (NotReady &) {
+      }
+      account.has_download_orders = false;  // note! don't wait for ack
+    }
 }
 
 void Simple::operator()(Event<StreamStatus> const &event) {
   auto &[message_info, stream_status] = event;
-  // XXX FIXME TODO we need better identification of the primary feed
+  // XXX FIXME TODO we need better (easier) identification of the primary feed
   if (stream_status.supports.has(market_data_type_) && stream_status.priority == Priority::PRIMARY) {
     auto callback = []([[maybe_unused]] auto &instrument) {};  // XXX TODO option to do something if stream status changes
     get_instruments_by_source(event, callback);
   }
 }
 
-// XXX FIXME TODO this is the real update (**NOT** correlated with latency assumptions when simulating)
+// XXX FIXME TODO this is the real update (**NOT** correlated with simulated latency assumptions)
 void Simple::operator()(Event<ExternalLatency> const &event) {
   auto &[message_info, external_latency] = event;
   auto &source = sources_[message_info.source];
   assert(external_latency.stream_id > 0);
-  source.stream_latency.resize(std::max<size_t>(external_latency.stream_id, std::size(source.stream_latency)));
-  source.stream_latency[external_latency.stream_id - 1] = external_latency.latency;  // XXX TODO smooth
+  auto index = external_latency.stream_id - 1;
+  source.stream_latency.resize(std::max<size_t>(index + 1, std::size(source.stream_latency)));
+  source.stream_latency[index] = external_latency.latency;  // XXX TODO smooth
 }
 
 void Simple::operator()(Event<GatewayStatus> const &event) {
   auto &[message_info, gateway_status] = event;
   auto &source = sources_[message_info.source];
   if (source.accounts.find(gateway_status.account) != std::end(source.accounts)) {
-    source.available = gateway_status.available;
-    log::info("DEBUG [{}] available={}"sv, message_info.source, source.available);
+    // XXX TODO use available?
   }
   update();
 }
@@ -229,46 +246,89 @@ void Simple::operator()(Event<TradeSummary> const &event) {
 
 void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
   auto &[message_info, order_ack] = event;
+  auto &source = sources_[message_info.source];
+  assert(source.ready);
+  auto callback = [&]([[maybe_unused]] auto &account) {
+    switch (order_ack.origin) {
+      using enum Origin;
+      case UNDEFINED:
+        assert(false);
+        break;
+      case CLIENT:
+      case GATEWAY:
+      case BROKER:
+        break;
+      case EXCHANGE:
+        break;
+    }
+  };
+  get_account(event, callback);
 }
 
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   auto &[message_info, order_update] = event;
+  auto &source = sources_[message_info.source];
+  if (source.ready) {
+    // XXX TODO
+  } else {
+    if ((!strategy_id_ || order_update.strategy_id == strategy_id_) && !roq::utils::is_order_complete(order_update.order_status)) {
+      auto iter = source.accounts.find(order_update.account);
+      if (iter != std::end(source.accounts)) {
+        auto &account = (*iter).second;
+        account.has_download_orders = true;  // XXX FIXME TODO here it could be useful to sub-divide by instrument...
+      }
+    }
+  }
 }
 
 void Simple::operator()(Event<PositionUpdate> const &event) {
   auto &[message_info, position_update] = event;
   assert(false);  // not yet implemented...
   log::fatal("DEBUG {}"sv, position_update);
+  auto callback = [&]([[maybe_unused]] auto &account) {};
+  get_account(event, callback);
 }
 
 // utils
 
 template <typename Callback>
 void Simple::get_instruments_by_source(MessageInfo const &message_info, Callback callback) {
-  if (message_info.source < std::size(sources_)) [[likely]] {
-    auto &instruments = sources_[message_info.source].instruments;
-    for (auto &[exchange, tmp] : instruments)
-      for (auto &[symbol, index] : tmp)
-        callback(instruments_[index]);
-    return;
-  }
-  log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  if (message_info.source >= std::size(sources_)) [[unlikely]]
+    log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  auto &source = sources_[message_info.source];
+  for (auto &[exchange, tmp] : source.instruments)
+    for (auto &[symbol, index] : tmp)
+      callback(instruments_[index]);
 }
 
 template <typename T, typename Callback>
 bool Simple::get_instrument(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
-  if (message_info.source < std::size(sources_)) [[likely]] {
-    auto &instruments = sources_[message_info.source].instruments;
-    auto iter_1 = instruments.find(value.exchange);
-    if (iter_1 != std::end(instruments)) {
-      auto &tmp_2 = (*iter_1).second;
-      auto iter_2 = tmp_2.find(value.symbol);
-      if (iter_2 != std::end(tmp_2)) {
-        callback(instruments_[(*iter_2).second]);
-        return true;
-      }
+  if (message_info.source >= std::size(sources_)) [[unlikely]]
+    log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  auto &source = sources_[message_info.source];
+  auto iter_1 = source.instruments.find(value.exchange);
+  if (iter_1 != std::end(source.instruments)) {
+    auto &tmp_2 = (*iter_1).second;
+    auto iter_2 = tmp_2.find(value.symbol);
+    if (iter_2 != std::end(tmp_2)) {
+      callback(instruments_[(*iter_2).second]);
+      return true;
     }
+  }
+  return false;
+}
+
+template <typename T, typename Callback>
+bool Simple::get_account(Event<T> const &event, Callback callback) {
+  auto &[message_info, value] = event;
+  if (message_info.source >= std::size(sources_)) [[unlikely]]
+    log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  auto &source = sources_[message_info.source];
+  auto iter = source.accounts.find(value.account);
+  if (iter != std::end(source.accounts)) {
+    callback((*iter).second);
+    return true;
   }
   return false;
 }
@@ -290,6 +350,38 @@ bool Simple::can_trade() const {
   return result;
 }
 
+void Simple::maybe_trade(Side side, Instrument const &lhs, Instrument const &rhs) {
+  auto helper = [this](auto side, auto &instrument) {
+    auto order_id = ++max_order_id_;
+    auto create_order = CreateOrder{
+        .account = instrument.account,
+        .order_id = order_id,
+        .exchange = instrument.exchange,
+        .symbol = instrument.symbol,
+        .side = side,
+        .position_effect = {},  // XXX TODO instrument config
+        .margin_mode = {},      // XXX TODO instrument config
+        .max_show_quantity = NaN,
+        .order_type = OrderType::LIMIT,
+        .time_in_force = TimeInForce::GTC,
+        .execution_instructions = {},
+        .request_template = {},
+        .quantity = 1.0,  // XXX TODO
+        .price = NaN,     // XXX TODO
+        .stop_price = NaN,
+        .routing_id = {},
+        .strategy_id = strategy_id_,
+    };
+    try {
+      log::debug("create_order={}, source={}"sv, create_order, instrument.source);
+      dispatcher_.send(create_order, instrument.source);
+    } catch (NotReady &) {
+    }
+  };
+  helper(side, lhs);
+  helper(roq::utils::invert(side), rhs);
+}
+
 void Simple::update() {
   for (size_t i = 0; i < std::size(instruments_); ++i)
     log::debug("[{}] instrument={}"sv, i, instruments_[i]);
@@ -298,12 +390,18 @@ void Simple::update() {
     return;
   }
   for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
-    auto &lhs = instruments_[i].state;
+    auto &lhs = instruments_[i];
     for (size_t j = i + 1; j < std::size(instruments_); ++j) {
-      auto &rhs = instruments_[j].state;
-      auto spread_1 = lhs.best.bid_price - rhs.best.ask_price;
-      auto spread_2 = rhs.best.bid_price - lhs.best.ask_price;
-      log::debug("[{}][{}] {} {}"sv, i, j, spread_1, spread_2);
+      auto &rhs = instruments_[j];
+      auto spread_1 = lhs.state.best.bid_price - rhs.state.best.ask_price;  // sell lhs, buy rhs
+      auto spread_2 = rhs.state.best.bid_price - lhs.state.best.ask_price;  // sell rhs, buy lhs
+      auto trigger_1 = threshold_ < spread_1;
+      auto trigger_2 = threshold_ < spread_2;
+      log::debug("[{}][{}] {} ({}) {} ({})"sv, i, j, spread_1, trigger_1, spread_2, trigger_2);
+      if (trigger_1)
+        maybe_trade(Side::SELL, lhs, rhs);
+      if (trigger_2)
+        maybe_trade(Side::BUY, lhs, rhs);
     }
   }
 }

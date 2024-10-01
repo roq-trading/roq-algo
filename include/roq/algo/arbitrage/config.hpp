@@ -21,6 +21,7 @@ namespace algo {
 namespace arbitrage {
 
 struct ROQ_PUBLIC Config final {
+  uint32_t strategy_id = {};
   std::span<Instrument const> instruments;
   MarketDataSource market_data_source = {};
   std::chrono::nanoseconds max_age = {};  // when exchange doesn't support trading status
@@ -42,6 +43,7 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
+        R"(strategy_id={}, )"
         R"(instruments=[{}], )"
         R"(market_data_source={}, )"
         R"(max_age={}, )"
@@ -50,6 +52,7 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
         R"(min_position_0={}, )"
         R"(max_position_0={})"
         R"(}})"sv,
+        value.strategy_id,
         fmt::join(value.instruments, ", "sv),
         value.market_data_source,
         value.max_age,

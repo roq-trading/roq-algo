@@ -46,7 +46,6 @@ struct Simple final : public strategy::Handler {
   Simple(Simple const &) = delete;
 
   struct State final {
-    bool ready = {};
     double tick_size = NaN;
     double multiplier = NaN;
     double min_trade_vol = NaN;
@@ -103,19 +102,36 @@ struct Simple final : public strategy::Handler {
 
   bool can_trade() const;
 
+  void maybe_trade(Side, Instrument const &lhs, Instrument const &rhs);
+
   void update();
 
+  struct Order final {
+    Side side = {};
+    double quantity = NaN;
+    OrderStatus order_status = {};
+  };
+
+  struct Account final {
+    bool has_download_orders = {};
+    utils::unordered_map<size_t, Order> working_orders_by_instrument;  // <<< maybe in instrument
+  };
+
   struct Source final {
+    utils::unordered_map<std::string_view, Account> accounts;
     utils::unordered_map<std::string_view, utils::unordered_map<std::string_view, size_t>> const instruments;
-    utils::unordered_set<std::string_view> const accounts;
     bool ready = {};
     std::vector<std::chrono::nanoseconds> stream_latency;
-    roq::Mask<roq::SupportType> available;
+    utils::unordered_map<uint64_t, Order> working_orders;
   };
+
+  template <typename T, typename Callback>
+  bool get_account(Event<T> const &, Callback);
 
  private:
   Dispatcher &dispatcher_;
   // config
+  uint32_t const strategy_id_;
   std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
   SupportType const market_data_type_;
   double const threshold_;
@@ -142,7 +158,6 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(ready={}, )"
         R"(tick_size={}, )"
         R"(multiplier={}, )"
         R"(min_trade_vol={}, )"
@@ -150,7 +165,6 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         R"(trading_status={}, )"
         R"(best={})"
         R"(}})"sv,
-        value.ready,
         value.tick_size,
         value.multiplier,
         value.min_trade_vol,
