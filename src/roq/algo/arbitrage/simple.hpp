@@ -106,7 +106,7 @@ struct Simple final : public strategy::Handler {
   void update();
 
   struct Source final {
-    utils::unordered_map<std::string_view, utils::unordered_map<std::string_view, size_t>> const lookup;
+    utils::unordered_map<std::string_view, utils::unordered_map<std::string_view, size_t>> const instruments;
     utils::unordered_set<std::string_view> const accounts;
     bool ready = {};
     std::vector<std::chrono::nanoseconds> stream_latency;
@@ -118,6 +118,10 @@ struct Simple final : public strategy::Handler {
   // config
   std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
   SupportType const market_data_type_;
+  double const threshold_;
+  double const quantity_0_;
+  double const min_position_0_;
+  double const max_position_0_;
   // cache
   Cache &cache_;
   // state

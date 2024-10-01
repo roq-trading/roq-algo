@@ -65,13 +65,13 @@ auto create_sources(auto &instruments) {
       result = std::max<size_t>(result, item.source);
     return result;
   }();
-  // lookup
-  using lookup_type = std::remove_cvref<decltype(result_type::value_type::lookup)>::type;
-  std::vector<lookup_type> tmp;
-  tmp.resize(max_source + 1);
+  // instruments
+  using instruments_type = std::remove_cvref<decltype(result_type::value_type::instruments)>::type;
+  std::vector<instruments_type> tmp_1;
+  tmp_1.resize(max_source + 1);
   for (size_t i = 0; i < std::size(instruments); ++i) {
     auto &item = instruments[i];
-    tmp[item.source][item.exchange][item.symbol] = i;
+    tmp_1[item.source][item.exchange][item.symbol] = i;
   }
   // accounts
   using accounts_type = std::remove_cvref<decltype(result_type::value_type::accounts)>::type;
@@ -83,9 +83,9 @@ auto create_sources(auto &instruments) {
   }
   // source
   for (size_t i = 0; i < (max_source + 1); ++i) {
-    auto &lookup = tmp[i];
+    auto &instruments = tmp_1[i];
     auto &accounts = tmp_2[i];
-    result.emplace_back(std::move(lookup), std::move(accounts));
+    result.emplace_back(std::move(instruments), std::move(accounts));
   }
   return result;
 }
@@ -94,7 +94,8 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, cache_{cache},
+    : dispatcher_{dispatcher}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)}, threshold_{config.threshold},
+      quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0}, cache_{cache},
       instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
@@ -245,8 +246,8 @@ void Simple::operator()(Event<PositionUpdate> const &event) {
 template <typename Callback>
 void Simple::get_instruments_by_source(MessageInfo const &message_info, Callback callback) {
   if (message_info.source < std::size(sources_)) [[likely]] {
-    auto &lookup = sources_[message_info.source].lookup;
-    for (auto &[exchange, tmp] : lookup)
+    auto &instruments = sources_[message_info.source].instruments;
+    for (auto &[exchange, tmp] : instruments)
       for (auto &[symbol, index] : tmp)
         callback(instruments_[index]);
     return;
@@ -258,9 +259,9 @@ template <typename T, typename Callback>
 bool Simple::get_instrument(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
   if (message_info.source < std::size(sources_)) [[likely]] {
-    auto &lookup = sources_[message_info.source].lookup;
-    auto iter_1 = lookup.find(value.exchange);
-    if (iter_1 != std::end(lookup)) {
+    auto &instruments = sources_[message_info.source].instruments;
+    auto iter_1 = instruments.find(value.exchange);
+    if (iter_1 != std::end(instruments)) {
       auto &tmp_2 = (*iter_1).second;
       auto iter_2 = tmp_2.find(value.symbol);
       if (iter_2 != std::end(tmp_2)) {
