@@ -396,7 +396,6 @@ void Simple::maybe_trade(Side side, Instrument &lhs, Instrument &rhs) {
         .strategy_id = strategy_id_,
     };
     try {
-      log::debug("create_order={}, source={}"sv, create_order, instrument.source);
       dispatcher_.send(create_order, instrument.source);
     } catch (NotReady &) {
     }
