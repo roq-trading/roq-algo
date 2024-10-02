@@ -460,7 +460,7 @@ void Simple::check(Event<T> const &event) {
   assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
   assert(message_info.receive_time.count());
   assert(message_info.receive_time_utc.count());
-  assert(diff >= 0ns || message_info.source == SOURCE_SELF);  // XXX FIXME BUG -- timer currently dispatched out of order
+  assert(diff >= 0ns);
   // note! diff_utc could actually be negative (clock adjustment, difference in sampling between cores, etc.)
 }
 
