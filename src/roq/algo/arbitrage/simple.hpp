@@ -54,6 +54,8 @@ struct Simple final : public strategy::Handler {
     Layer best;
     std::unique_ptr<cache::MarketByPrice> market_by_price;
     std::unique_ptr<cache::MarketByOrder> market_by_order;
+    // DEBUG
+    bool latch = {};
   };
 
   struct Instrument final {
@@ -102,7 +104,7 @@ struct Simple final : public strategy::Handler {
 
   bool can_trade() const;
 
-  void maybe_trade(Side, Instrument const &lhs, Instrument const &rhs);
+  void maybe_trade(Side, Instrument &lhs, Instrument &rhs);
 
   void update();
 
@@ -128,6 +130,9 @@ struct Simple final : public strategy::Handler {
   template <typename T, typename Callback>
   bool get_account(Event<T> const &, Callback);
 
+  template <typename T>
+  void check(Event<T> const &);
+
  private:
   Dispatcher &dispatcher_;
   // config
@@ -144,6 +149,9 @@ struct Simple final : public strategy::Handler {
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;
   uint64_t max_order_id_ = {};
+  // DEBUG
+  std::chrono::nanoseconds last_receive_time_ = {};
+  std::chrono::nanoseconds last_receive_time_utc_ = {};
 };
 
 }  // namespace arbitrage
