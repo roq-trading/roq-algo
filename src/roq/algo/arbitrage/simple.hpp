@@ -45,18 +45,28 @@ struct Simple final : public strategy::Handler {
   Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
 
+  enum class OrderState {
+    IDLE,
+    CREATE,
+    WORKING,
+    CANCEL,
+  };
+
   struct State final {
+    // reference data
     double tick_size = NaN;
     double multiplier = NaN;
     double min_trade_vol = NaN;
+    // market data
     TradingStatus trading_status = {};
     Layer best;
     std::unique_ptr<cache::MarketByPrice> market_by_price;
     std::unique_ptr<cache::MarketByOrder> market_by_order;
     std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     std::chrono::nanoseconds latency = {};
-    // DEBUG
-    bool latch = {};
+    // order management
+    OrderState order_state = {};
+    uint64_t order_id = {};
   };
 
   struct Instrument final {
@@ -107,11 +117,11 @@ struct Simple final : public strategy::Handler {
   template <typename T>
   void update_latency(std::chrono::nanoseconds &latency, Event<T> const &);
 
-  bool can_trade() const;
+  void update(MessageInfo const &);
 
-  void maybe_trade(Side, Instrument &lhs, Instrument &rhs);
+  bool is_ready(MessageInfo const &, Instrument const &) const;
 
-  void update();
+  void maybe_trade(MessageInfo const &, Side, Instrument &lhs, Instrument &rhs);
 
   struct Order final {
     Side side = {};
@@ -177,7 +187,9 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         R"(trading_status={}, )"
         R"(best={}, )"
         R"(exchange_time_utc={}, )"
-        R"(latency={})"
+        R"(latency={}, )"
+        R"(order_state={}, )"
+        R"(order_id={})"
         R"(}})"sv,
         value.tick_size,
         value.multiplier,
@@ -185,7 +197,9 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         value.trading_status,
         value.best,
         value.exchange_time_utc,
-        value.latency);
+        value.latency,
+        magic_enum::enum_name(value.order_state),
+        value.order_id);
   }
 };
 
