@@ -138,7 +138,7 @@ void Simple::operator()(Event<Ready> const &event) {
   source.ready = true;
   for (auto &[name, account] : source.accounts)
     if (account.has_download_orders) {
-      // XXX FIXME TODO iterate by exchange/symbol
+      // XXX FIXME TODO cancel by instrument
       auto cancel_all_orders = CancelAllOrders{
           .account = name,
           .order_id = {},
@@ -216,8 +216,10 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &instrument) {
     roq::utils::update_max(instrument.state.exchange_time_utc, top_of_book.exchange_time_utc);
-    if (market_data_type_ == SupportType::TOP_OF_BOOK)
+    if (market_data_type_ == SupportType::TOP_OF_BOOK) {
       roq::utils::update(instrument.state.best, top_of_book.layer);
+      update_latency(instrument.state.latency, event);
+    }
     update();
   };
   get_instrument(event, callback);
@@ -229,8 +231,10 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   auto callback = [&](auto &instrument) {
     roq::utils::update_max(instrument.state.exchange_time_utc, market_by_price_update.exchange_time_utc);
     (*instrument.state.market_by_price)(event);
-    if (market_data_type_ == SupportType::MARKET_BY_PRICE)
+    if (market_data_type_ == SupportType::MARKET_BY_PRICE) {
       (*instrument.state.market_by_price).extract({&instrument.state.best, 1}, true);
+      update_latency(instrument.state.latency, event);
+    }
     update();
   };
   get_instrument(event, callback);
@@ -242,8 +246,10 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   auto callback = [&](auto &instrument) {
     roq::utils::update_max(instrument.state.exchange_time_utc, market_by_order_update.exchange_time_utc);
     (*instrument.state.market_by_order)(event);
-    if (market_data_type_ == SupportType::MARKET_BY_ORDER)
+    if (market_data_type_ == SupportType::MARKET_BY_ORDER) {
       (*instrument.state.market_by_order).extract_2({&instrument.state.best, 1});
+      update_latency(instrument.state.latency, event);
+    }
     update();
   };
   get_instrument(event, callback);
@@ -264,7 +270,7 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
   auto &[message_info, order_ack] = event;
   auto &source = sources_[message_info.source];
   assert(source.ready);
-  auto callback = [&]([[maybe_unused]] auto &account) {
+  auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {
     switch (order_ack.origin) {
       using enum Origin;
       case UNDEFINED:
@@ -272,39 +278,53 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
         break;
       case CLIENT:
       case GATEWAY:
-      case BROKER:
+        assert(order_ack.round_trip_latency == 0ns);
         break;
+      case BROKER:
       case EXCHANGE:
-        assert(order_ack.round_trip_latency > 0ns || true);  // XXX FIXME TODO the simulator doesn't currently track round-trip latency
+        assert(order_ack.round_trip_latency > 0ns);
         break;
     }
   };
-  get_account(event, callback);
+  if (!get_account_and_instrument(event, callback))
+    log::fatal("Unexepcted: order_ack={}"sv, order_ack);
 }
 
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   check(event);
   auto &[message_info, order_update] = event;
+  if (strategy_id_ && strategy_id_ != order_update.strategy_id)
+    return;
   auto &source = sources_[message_info.source];
-  if (source.ready) {
-    // XXX TODO implement
-  } else {
-    if ((!strategy_id_ || order_update.strategy_id == strategy_id_) && !roq::utils::is_order_complete(order_update.order_status)) {
-      auto iter = source.accounts.find(order_update.account);
-      if (iter != std::end(source.accounts)) {
-        auto &account = (*iter).second;
-        account.has_download_orders = true;  // XXX FIXME TODO here it could be useful to sub-divide by instrument...
+  auto callback = [&](auto &account, auto &instrument) {
+    if (source.ready) {
+      // XXX TODO implement
+    } else {
+      if (!roq::utils::is_order_complete(order_update.order_status)) {
+        account.has_download_orders = true;  // XXX FIXME TODO by instrument?
       }
     }
-  }
+  };
+  get_account_and_instrument(event, callback);
 }
 
-// XXX FIXME TODO snapshot not received ???
+void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
+  check(event);
+  auto &[message_info, trade_update] = event;
+  if (strategy_id_ && strategy_id_ != trade_update.strategy_id)
+    return;
+  auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {
+    // XXX TODO internal position tracking
+  };
+  get_account_and_instrument(event, callback);
+}
+
+// XXX FIXME TODO simulator doesn't emit snapshot ???
 void Simple::operator()(Event<PositionUpdate> const &event) {
   check(event);
   auto &[message_info, position_update] = event;
-  auto callback = [&]([[maybe_unused]] auto &account) {};
-  get_account(event, callback);
+  auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {};
+  get_account_and_instrument(event, callback);
 }
 
 // utils
@@ -315,8 +335,10 @@ void Simple::get_instruments_by_source(MessageInfo const &message_info, Callback
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
   auto &source = sources_[message_info.source];
   for (auto &[exchange, tmp] : source.instruments)
-    for (auto &[symbol, index] : tmp)
-      callback(instruments_[index]);
+    for (auto &[symbol, index] : tmp) {
+      auto &instrument = instruments_[index];
+      callback(instrument);
+    }
 }
 
 template <typename T, typename Callback>
@@ -326,29 +348,50 @@ bool Simple::get_instrument(Event<T> const &event, Callback callback) {
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
   auto &source = sources_[message_info.source];
   auto iter_1 = source.instruments.find(value.exchange);
-  if (iter_1 != std::end(source.instruments)) {
-    auto &tmp_2 = (*iter_1).second;
-    auto iter_2 = tmp_2.find(value.symbol);
-    if (iter_2 != std::end(tmp_2)) {
-      callback(instruments_[(*iter_2).second]);
-      return true;
-    }
-  }
-  return false;
+  if (iter_1 == std::end(source.instruments))
+    return false;
+  auto &tmp = (*iter_1).second;
+  auto iter_2 = tmp.find(value.symbol);
+  if (iter_2 == std::end(tmp))
+    return false;
+  auto &instrument = instruments_[(*iter_2).second];
+  callback(instrument);
+  return true;
 }
 
 template <typename T, typename Callback>
-bool Simple::get_account(Event<T> const &event, Callback callback) {
+bool Simple::get_account_and_instrument(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
   if (message_info.source >= std::size(sources_)) [[unlikely]]
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
   auto &source = sources_[message_info.source];
-  auto iter = source.accounts.find(value.account);
-  if (iter != std::end(source.accounts)) {
-    callback((*iter).second);
-    return true;
-  }
-  return false;
+  auto iter_1 = source.accounts.find(value.account);
+  if (iter_1 == std::end(source.accounts))
+    return false;
+  auto &account = (*iter_1).second;
+  auto iter_2 = source.instruments.find(value.exchange);
+  if (iter_2 == std::end(source.instruments))
+    return false;
+  auto &tmp = (*iter_2).second;
+  auto iter_3 = tmp.find(value.symbol);
+  if (iter_3 == std::end(tmp))
+    return false;
+  auto &instrument = instruments_[(*iter_3).second];
+  callback(account, instrument);
+  return true;
+}
+
+template <typename T>
+void Simple::update_latency(std::chrono::nanoseconds &latency, Event<T> const &event) {
+  auto &[message_info, value] = event;
+  auto base = [&]() {
+    if (value.exchange_time_utc.count())
+      return value.exchange_time_utc;
+    if (value.sending_time_utc.count())
+      return value.sending_time_utc;
+    log::fatal("Unexpected: requires exchange_time_utc or sending_time_utc"sv);
+  }();
+  latency = message_info.receive_time_utc - base;
 }
 
 bool Simple::can_trade() const {
@@ -444,7 +487,7 @@ void Simple::check(Event<T> const &event) {
     return result;
   };
   auto diff = helper(last_receive_time_, message_info.receive_time);
-  auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);  // XXX FIXME TODO better to track by source, but not currently validated
+  auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);  // XXX FIXME TODO track by source
   log::debug(
       "[{}:{}] receive_time={}({}), receive_time_utc={}({}), {}={}"sv,
       message_info.source,
@@ -455,12 +498,11 @@ void Simple::check(Event<T> const &event) {
       diff_utc,
       get_name<T>(),
       value);
-  // validate
   assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
   assert(message_info.receive_time.count());
   assert(message_info.receive_time_utc.count());
   assert(diff >= 0ns);
-  // note! diff_utc could actually be negative (clock adjustment, difference in sampling between cores, etc.)
+  // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
 }
 
 }  // namespace arbitrage

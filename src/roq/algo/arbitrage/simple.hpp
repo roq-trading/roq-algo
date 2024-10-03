@@ -49,11 +49,12 @@ struct Simple final : public strategy::Handler {
     double tick_size = NaN;
     double multiplier = NaN;
     double min_trade_vol = NaN;
-    std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
     TradingStatus trading_status = {};
     Layer best;
     std::unique_ptr<cache::MarketByPrice> market_by_price;
     std::unique_ptr<cache::MarketByOrder> market_by_order;
+    std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
+    std::chrono::nanoseconds latency = {};
     // DEBUG
     bool latch = {};
   };
@@ -91,6 +92,7 @@ struct Simple final : public strategy::Handler {
 
   void operator()(Event<OrderAck> const &, cache::Order const &) override;
   void operator()(Event<OrderUpdate> const &, cache::Order const &) override;
+  void operator()(Event<TradeUpdate> const &, cache::Order const &) override;
 
   void operator()(Event<PositionUpdate> const &) override;
 
@@ -101,6 +103,9 @@ struct Simple final : public strategy::Handler {
 
   template <typename T, typename Callback>
   bool get_instrument(Event<T> const &, Callback);
+
+  template <typename T>
+  void update_latency(std::chrono::nanoseconds &latency, Event<T> const &);
 
   bool can_trade() const;
 
@@ -128,7 +133,7 @@ struct Simple final : public strategy::Handler {
   };
 
   template <typename T, typename Callback>
-  bool get_account(Event<T> const &, Callback);
+  bool get_account_and_instrument(Event<T> const &, Callback);
 
   template <typename T>
   void check(Event<T> const &);
@@ -169,16 +174,18 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
         R"(tick_size={}, )"
         R"(multiplier={}, )"
         R"(min_trade_vol={}, )"
-        R"(exchange_time_utc={}, )"
         R"(trading_status={}, )"
-        R"(best={})"
+        R"(best={}, )"
+        R"(exchange_time_utc={}, )"
+        R"(latency={})"
         R"(}})"sv,
         value.tick_size,
         value.multiplier,
         value.min_trade_vol,
-        value.exchange_time_utc,
         value.trading_status,
-        value.best);
+        value.best,
+        value.exchange_time_utc,
+        value.latency);
   }
 };
 
