@@ -29,7 +29,8 @@ void Summary::print() const {
         log::info(R"(    symbol="{}")"sv, symbol);
         log::info("      order_ack={}"sv, instrument.order_ack);
         log::info("      order_update={}"sv, instrument.order_update);
-        log::info("      trade_update={}"sv, instrument.trade_update);
+        log::info("      trade_update:"sv);
+        log::info("        fills={}"sv, instrument.trade_update.fills);
       }
     }
   }
