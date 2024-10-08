@@ -16,6 +16,29 @@ namespace reporter {
 
 struct Summary final : public client::Reporter {
   struct Instrument final {
+    // market data
+    struct ReferenceData final {
+      size_t total_count = {};
+    } reference_data;
+    struct MarketStatus final {
+      size_t total_count = {};
+    } market_status;
+    struct TopOfBook final {
+      size_t total_count = {};
+    } top_of_book;
+    struct MarketByPriceUpdate final {
+      size_t total_count = {};
+    } market_by_price_update;
+    struct MarketByOrderUpdate final {
+      size_t total_count = {};
+    } market_by_order_update;
+    struct TradeSummary final {
+      size_t total_count = {};
+    } trade_summary;
+    struct StatisticsUpdate final {
+      size_t total_count = {};
+    } statistics_update;
+    // order management
     struct OrderAck final {
       size_t accepted_count = {};
       size_t rejected_count = {};
@@ -35,14 +58,28 @@ struct Summary final : public client::Reporter {
         double total_volume = 0.0;
       } fills;
     } trade_update;
+    struct PositionUpdate final {
+      size_t total_count = {};
+      double min_position = NaN;
+      double max_position = NaN;
+    } position_update;
   };
 
  protected:
   void print() const override;
 
+  void operator()(Event<ReferenceData> const &) override;
+  void operator()(Event<MarketStatus> const &) override;
+  void operator()(Event<TopOfBook> const &) override;
+  void operator()(Event<MarketByPriceUpdate> const &) override;
+  void operator()(Event<MarketByOrderUpdate> const &) override;
+  void operator()(Event<TradeSummary> const &) override;
+  void operator()(Event<StatisticsUpdate> const &) override;
+
   void operator()(Event<OrderAck> const &) override;
   void operator()(Event<OrderUpdate> const &) override;
   void operator()(Event<TradeUpdate> const &) override;
+  void operator()(Event<PositionUpdate> const &) override;
 
   template <typename T, typename Callback>
   void get_instrument(Event<T> const &, Callback);
@@ -54,6 +91,104 @@ struct Summary final : public client::Reporter {
 }  // namespace reporter
 }  // namespace algo
 }  // namespace roq
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::ReferenceData> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::ReferenceData const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::MarketStatus> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::MarketStatus const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::TopOfBook> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::TopOfBook const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::MarketByPriceUpdate> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::MarketByPriceUpdate const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::MarketByOrderUpdate> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::MarketByOrderUpdate const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::TradeSummary> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::TradeSummary const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
+
+template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::StatisticsUpdate> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::StatisticsUpdate const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={})"
+        R"(}})"sv,
+        value.total_count);
+  }
+};
 
 template <>
 struct fmt::formatter<roq::algo::reporter::Summary::Instrument::OrderAck> {
@@ -128,6 +263,24 @@ struct fmt::formatter<roq::algo::reporter::Summary::Instrument::TradeUpdate> {
 };
 
 template <>
+struct fmt::formatter<roq::algo::reporter::Summary::Instrument::PositionUpdate> {
+  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
+  auto format(roq::algo::reporter::Summary::Instrument::PositionUpdate const &value, format_context &context) const {
+    using namespace std::literals;
+    return fmt::format_to(
+        context.out(),
+        R"({{)"
+        R"(total_count={}, )"
+        R"(min_position={}, )"
+        R"(max_position={})"
+        R"(}})"sv,
+        value.total_count,
+        value.min_position,
+        value.max_position);
+  }
+};
+
+template <>
 struct fmt::formatter<roq::algo::reporter::Summary::Instrument> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
   auto format(roq::algo::reporter::Summary::Instrument const &value, format_context &context) const {
@@ -135,10 +288,24 @@ struct fmt::formatter<roq::algo::reporter::Summary::Instrument> {
     return fmt::format_to(
         context.out(),
         R"({{)"
+        R"(reference_data={}, )"
+        R"(market_status={}, )"
+        R"(top_of_book={}, )"
+        R"(market_by_price_update={}, )"
+        R"(market_by_order_update={}, )"
+        R"(trade_summary={}, )"
+        R"(statistics_update={}, )"
         R"(order_ack={}, )"
         R"(order_update={}, )"
         R"(trade_update={})"
         R"(}})"sv,
+        value.reference_data,
+        value.market_status,
+        value.top_of_book,
+        value.market_by_price_update,
+        value.market_by_order_update,
+        value.trade_summary,
+        value.statistics_update,
         value.order_ack,
         value.order_update,
         value.trade_update);

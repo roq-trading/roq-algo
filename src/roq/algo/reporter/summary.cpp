@@ -8,6 +8,7 @@
 
 #include "roq/utils/common.hpp"
 #include "roq/utils/compare.hpp"
+#include "roq/utils/update.hpp"
 
 using namespace std::literals;
 
@@ -27,16 +28,68 @@ void Summary::print() const {
       log::info(R"(  exchange="{}")"sv, exchange);
       for (auto &[symbol, instrument] : tmp_2) {
         log::info(R"(    symbol="{}")"sv, symbol);
-        log::info("      order_ack={}"sv, instrument.order_ack);
-        log::info("      order_update={}"sv, instrument.order_update);
-        log::info("      trade_update:"sv);
-        log::info("        fills={}"sv, instrument.trade_update.fills);
+        log::info("      market_data:"sv);
+        log::info("        reference_data={}"sv, instrument.reference_data);
+        log::info("        market_status={}"sv, instrument.market_status);
+        log::info("        top_of_book={}"sv, instrument.top_of_book);
+        log::info("        market_by_price_update={}"sv, instrument.market_by_price_update);
+        log::info("        market_by_order_update={}"sv, instrument.market_by_order_update);
+        log::info("        trade_summary={}"sv, instrument.trade_summary);
+        log::info("        statistics_update={}"sv, instrument.statistics_update);
+        log::info("      order_management:"sv);
+        log::info("        order_ack={}"sv, instrument.order_ack);
+        log::info("        order_update={}"sv, instrument.order_update);
+        log::info("        trade_update:"sv);
+        log::info("          fills={}"sv, instrument.trade_update.fills);
+        log::info("        position_update={}"sv, instrument.position_update);
       }
     }
   }
 }
 
 // collector
+
+void Summary::operator()(Event<ReferenceData> const &event) {
+  // auto &[message_info, reference_data] = event;
+  auto callback = [&](auto &instrument) { ++instrument.reference_data.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<MarketStatus> const &event) {
+  // auto &[message_info, market_status] = event;
+  auto callback = [&](auto &instrument) { ++instrument.market_status.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<TopOfBook> const &event) {
+  // auto &[message_info, top_of_book] = event;
+  auto callback = [&](auto &instrument) { ++instrument.top_of_book.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<MarketByPriceUpdate> const &event) {
+  // auto &[message_info, market_by_price_update] = event;
+  auto callback = [&](auto &instrument) { ++instrument.market_by_price_update.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<MarketByOrderUpdate> const &event) {
+  // auto &[message_info, market_by_order_update] = event;
+  auto callback = [&](auto &instrument) { ++instrument.market_by_order_update.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<TradeSummary> const &event) {
+  // auto &[message_info, trade_summary] = event;
+  auto callback = [&](auto &instrument) { ++instrument.trade_summary.total_count; };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<StatisticsUpdate> const &event) {
+  // auto &[message_info, statistics_update] = event;
+  auto callback = [&](auto &instrument) { ++instrument.statistics_update.total_count; };
+  get_instrument(event, callback);
+}
 
 void Summary::operator()(Event<OrderAck> const &event) {
   auto &[message_info, order_ack] = event;
@@ -93,6 +146,17 @@ void Summary::operator()(Event<TradeUpdate> const &event) {
       ++instrument.trade_update.fills.total_count;
       instrument.trade_update.fills.total_volume += fill.quantity;
     }
+  };
+  get_instrument(event, callback);
+}
+
+void Summary::operator()(Event<PositionUpdate> const &event) {
+  auto &[message_info, position_update] = event;
+  auto callback = [&](auto &instrument) {
+    ++instrument.position_update.total_count;
+    auto position = position_update.long_quantity - position_update.short_quantity;
+    roq::utils::update_min(instrument.position_update.min_position, position);
+    roq::utils::update_max(instrument.position_update.max_position, position);
   };
   get_instrument(event, callback);
 }
