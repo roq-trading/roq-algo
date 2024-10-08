@@ -474,7 +474,7 @@ bool Simple::can_trade(Side side, Instrument &instrument) {
 }
 
 // XXX FIXME TODO support TimeInForce::IOC
-void Simple::maybe_trade(MessageInfo const &message_info, Side side, Instrument &lhs, Instrument &rhs) {
+void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instrument &rhs) {
   auto helper = [this](auto side, auto &instrument) -> bool {
     assert(instrument.state.order_state == OrderState::IDLE);
     assert(instrument.state.order_id == 0);
