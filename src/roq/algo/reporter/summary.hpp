@@ -8,13 +8,13 @@
 
 #include "roq/utils/container.hpp"
 
-#include "roq/client.hpp"
+#include "roq/client/reporter.hpp"
 
 namespace roq {
 namespace algo {
 namespace reporter {
 
-struct Summary final : public client::Simulator2::Reporter {
+struct Summary final : public client::Reporter {
   struct Instrument final {
     struct OrderAck final {
       size_t accepted_count = {};

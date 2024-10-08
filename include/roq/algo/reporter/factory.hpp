@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "roq/client.hpp"
+#include "roq/client/reporter.hpp"
 
 namespace roq {
 namespace algo {
@@ -18,7 +18,7 @@ struct ROQ_PUBLIC Factory final {
     SUMMARY,
   };
 
-  static std::unique_ptr<client::Simulator2::Reporter> create(Type);
+  static std::unique_ptr<client::Reporter> create(Type);
 };
 
 }  // namespace reporter

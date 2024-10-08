@@ -15,14 +15,14 @@ namespace reporter {
 // === HELPERS ===
 
 namespace {
-struct None final : public client::Simulator2::Reporter {
+struct None final : public client::Reporter {
   virtual void print() const override {}
 };
 }  // namespace
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<client::Simulator2::Reporter> Factory::create(Type type) {
+std::unique_ptr<client::Reporter> Factory::create(Type type) {
   switch (type) {
     using enum Factory::Type;
     case NONE:
