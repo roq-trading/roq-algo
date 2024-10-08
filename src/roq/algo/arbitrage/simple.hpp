@@ -76,11 +76,13 @@ struct Simple final : public strategy::Handler {
     std::string const account;
     // private:
     State state;
+    double position = 0.0;
   };
 
  protected:
   void operator()(Event<Timer> const &) override;
 
+  void operator()(Event<Connected> const &) override;
   void operator()(Event<Disconnected> const &) override;
 
   void operator()(Event<DownloadEnd> const &) override;
@@ -120,6 +122,8 @@ struct Simple final : public strategy::Handler {
   void update(MessageInfo const &);
 
   bool is_ready(MessageInfo const &, Instrument const &) const;
+
+  bool can_trade(Side, Instrument &);
 
   void maybe_trade(MessageInfo const &, Side, Instrument &lhs, Instrument &rhs);
 
@@ -215,12 +219,14 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::Instrument> {
         R"(exchange="{}", )"
         R"(symbol="{}", )"
         R"(account="{}", )"
-        R"(state={})"
+        R"(state={}, )"
+        R"(position={})"
         R"(}})"sv,
         value.source,
         value.exchange,
         value.symbol,
         value.account,
-        value.state);
+        value.state,
+        value.position);
   }
 };

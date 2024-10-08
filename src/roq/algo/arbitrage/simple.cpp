@@ -5,11 +5,11 @@
 #include "roq/logging.hpp"
 
 #include "roq/utils/common.hpp"
+#include "roq/utils/compare.hpp"
 #include "roq/utils/update.hpp"
 
-#include "roq/market/mbp/factory.hpp"
-
 #include "roq/market/mbo/factory.hpp"
+#include "roq/market/mbp/factory.hpp"
 
 #include "roq/algo/utils/common.hpp"
 
@@ -108,9 +108,16 @@ void Simple::operator()(Event<Timer> const &event) {
   // XXX TODO process delayed order requests
 }
 
+void Simple::operator()(Event<Connected> const &event) {
+  check(event);
+  auto &[message_info, connected] = event;
+  log::warn("[{}:{}] connected"sv, message_info.source, message_info.source_name);
+}
+
 void Simple::operator()(Event<Disconnected> const &event) {
   check(event);
   auto &[message_info, disconnected] = event;
+  log::warn("[{}:{}] disconnected"sv, message_info.source, message_info.source_name);
   // reset source
   auto &source = sources_[message_info.source];
   source.ready = false;
@@ -265,6 +272,7 @@ void Simple::operator()(Event<TradeSummary> const &event) {
   get_instrument(event, callback);
 }
 
+// XXX FIXME TODO manage reject
 void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
   check(event);
   auto &[message_info, order_ack] = event;
@@ -326,7 +334,7 @@ void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
   if (strategy_id_ && strategy_id_ != trade_update.strategy_id)
     return;
   auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {
-    // XXX TODO internal position tracking
+    // XXX FIXME TODO own position tracking (sum of fills)
   };
   get_account_and_instrument(event, callback);
 }
@@ -335,7 +343,9 @@ void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
 void Simple::operator()(Event<PositionUpdate> const &event) {
   check(event);
   auto &[message_info, position_update] = event;
-  auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {};
+  auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) {
+    instrument.position = position_update.long_quantity - position_update.short_quantity;
+  };
   get_account_and_instrument(event, callback);
 }
 
@@ -408,7 +418,7 @@ void Simple::update_latency(std::chrono::nanoseconds &latency, Event<T> const &e
 
 void Simple::update(MessageInfo const &message_info) {
   for (size_t i = 0; i < std::size(instruments_); ++i) {
-    log::debug("[{}] instrument={}"sv, i, instruments_[i]);
+    log::debug("instrument[{}]={}"sv, i, instruments_[i]);
     // XXX FIXME TODO check order state => maybe cancel or timeout
   }
   for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
@@ -437,7 +447,6 @@ bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrum
   if (instrument.state.order_state != OrderState::IDLE)
     return false;
   assert(instrument.state.order_id == 0);
-  // XXX FIXME TODO check positions
   // XXX FIXME TODO check rate-limit throttling
   auto is_market_active = [&]() {
     if (instrument.state.trading_status != TradingStatus{})
@@ -448,6 +457,20 @@ bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrum
   auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
   return is_market_active() && has_liquidity(instrument.state.best.bid_price, instrument.state.best.bid_quantity) &&
          has_liquidity(instrument.state.best.ask_price, instrument.state.best.ask_quantity);
+}
+
+bool Simple::can_trade(Side side, Instrument &instrument) {
+  switch (side) {
+    using enum Side;
+    case UNDEFINED:
+      assert(false);
+      break;
+    case BUY:
+      return roq::utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument
+    case SELL:
+      return roq::utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument
+  }
+  return false;
 }
 
 // XXX FIXME TODO support TimeInForce::IOC
@@ -488,17 +511,18 @@ void Simple::maybe_trade(MessageInfo const &message_info, Side side, Instrument 
     }
     return true;
   };
-  if (helper(side, lhs)) {
-    // note! only try second leg when first succeeded
+  if (can_trade(side, lhs) && helper(side, lhs)) {
+    // note! only try second leg when first succeeds
     if (!helper(roq::utils::invert(side), rhs)) {
-      // note! we should try-cancel first leg when second failed
-      // XXX FIXME TODO implement
+      // note! we should try-cancel first leg when second fails
+      // XXX FIXME TODO cancel first leg
     }
   }
 }
 
 template <typename T>
 void Simple::check(Event<T> const &event) {
+  using value_type = std::remove_cvref<T>::type;
   auto &[message_info, value] = event;
   auto helper = [](auto &lhs, auto rhs) {
     std::chrono::nanoseconds result;
@@ -524,9 +548,13 @@ void Simple::check(Event<T> const &event) {
       value);
   assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
   assert(message_info.receive_time.count());
-  assert(message_info.receive_time_utc.count());
   assert(diff >= 0ns);
-  // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
+  if constexpr (std::is_same<value_type, Connected>::value) {
+    // XXX FIXME simulator doesn't populate receive_time_utc
+  } else {
+    assert(message_info.receive_time_utc.count());
+    // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
+  }
 }
 
 }  // namespace arbitrage

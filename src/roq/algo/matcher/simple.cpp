@@ -93,6 +93,7 @@ Simple::Simple(Dispatcher &dispatcher, Config const &config, Cache &cache)
 }
 
 void Simple::operator()(Event<ReferenceData> const &event) {
+  check(event);
   auto &[message_info, reference_data] = event;
   dispatcher_(event);  // note! dispatch market data
   utils::update_max(exchange_time_utc_, reference_data.exchange_time_utc);
@@ -109,6 +110,7 @@ void Simple::operator()(Event<ReferenceData> const &event) {
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
+  check(event);
   auto &[message_info, market_status] = event;
   dispatcher_(event);  // note! dispatch market data
   utils::update_max(exchange_time_utc_, market_status.exchange_time_utc);
@@ -117,6 +119,7 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 }
 
 void Simple::operator()(Event<TopOfBook> const &event) {
+  check(event);
   auto &[message_info, top_of_book] = event;
   utils::update_max(exchange_time_utc_, top_of_book.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
@@ -131,6 +134,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 }
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
+  check(event);
   auto &[message_info, market_by_price_update] = event;
   utils::update_max(exchange_time_utc_, market_by_price_update.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
@@ -144,6 +148,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
+  check(event);
   auto &[message_info, market_by_order_update] = event;
   utils::update_max(exchange_time_utc_, market_by_order_update.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
@@ -157,18 +162,21 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
+  check(event);
   auto &[message_info, trade_summary] = event;
   utils::update_max(exchange_time_utc_, trade_summary.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
+  check(event);
   auto &[message_info, statistics_update] = event;
   utils::update_max(exchange_time_utc_, statistics_update.exchange_time_utc);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
 }
 
 void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
+  check(event);
   auto &[message_info, create_order] = event;
   auto validate = [&]() -> Error {
     // note! simulator will already have validated the request and here we just need to validate based on what is supported here
@@ -189,7 +197,6 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
     auto [price, overflow] = market::price_to_ticks(create_order.price, tick_size_, precision_);
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
-    add_order(order.order_id, order.side, price);
     if (is_aggressive(create_order.side, price)) {
       auto matched_price = [&]() -> double {
         switch (create_order.side) {
@@ -224,6 +231,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
       dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
       dispatch_trade_update(message_info, order, fill);
     } else {
+      add_order(order.order_id, order.side, price);
       order.order_status = OrderStatus::WORKING;
       order.remaining_quantity = create_order.quantity;
       order.traded_quantity = 0.0;
@@ -237,10 +245,12 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
 }
 
 void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
+  check(event);
   dispatch_order_ack(event, order, Error::NOT_SUPPORTED);
 }
 
 void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
+  check(event);
   auto &[message_info, cancel_order] = event;
   if (utils::is_order_complete(order.order_status)) {
     dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
@@ -258,7 +268,8 @@ void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   }
 }
 
-void Simple::operator()(Event<CancelAllOrders> const &) {
+void Simple::operator()(Event<CancelAllOrders> const &event) {
+  check(event);
   log::fatal("NOT IMPLEMENTED"sv);
 }
 
@@ -277,6 +288,7 @@ void Simple::operator()(Event<Layer> const &event) {
     return default_value;
   };
   auto matched_order = [&](auto &order) {
+    assert(utils::compare(order.remaining_quantity, 0.0) > 0);
     auto external_trade_id = fmt::format("trd-{}"sv, cache_.get_next_trade_id());
     auto fill = Fill{
         .exchange_time_utc = exchange_time_utc_,
@@ -435,15 +447,54 @@ void Simple::try_match(Side side, Callback callback) {
     [[unlikely]] case UNDEFINED:
       log::fatal("Unexpected"sv);
     case BUY: {
-      auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
+      auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
+      // log::debug("BUY"sv);
       try_match_helper(sell_, compare, best_.units.first, cache_, callback);
       break;
     }
     case SELL: {
-      auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
+      // log::debug("SELL"sv);
+      auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
       try_match_helper(buy_, compare, best_.units.second, cache_, callback);
       break;
     }
+  }
+}
+
+template <typename T>
+void Simple::check(Event<T> const &event) {
+  using value_type = std::remove_cvref<T>::type;
+  auto &[message_info, value] = event;
+  auto helper = [](auto &lhs, auto rhs) {
+    std::chrono::nanoseconds result;
+    if (lhs.count()) {
+      result = rhs - lhs;
+    } else {
+      result = {};
+    }
+    lhs = rhs;
+    return result;
+  };
+  auto diff = helper(last_receive_time_, message_info.receive_time);
+  auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);  // XXX FIXME TODO track by source
+  log::debug(
+      "[{}:{}] receive_time={}({}), receive_time_utc={}({}), {}={}"sv,
+      message_info.source,
+      message_info.source_name,
+      message_info.receive_time,
+      diff,
+      message_info.receive_time_utc,
+      diff_utc,
+      get_name<T>(),
+      value);
+  assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
+  assert(message_info.receive_time.count());
+  assert(diff >= 0ns);
+  if constexpr (std::is_same<value_type, Connected>::value) {
+    // XXX FIXME simulator doesn't populate receive_time_utc
+  } else {
+    assert(message_info.receive_time_utc.count());
+    // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
   }
 }
 

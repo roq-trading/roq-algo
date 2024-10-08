@@ -78,6 +78,9 @@ struct Simple final : public Handler {
   template <typename Callback>
   void try_match(Side, Callback);
 
+  template <typename T>
+  void check(Event<T> const &);
+
  private:
   Dispatcher &dispatcher_;
   // config
@@ -102,6 +105,9 @@ struct Simple final : public Handler {
   // orders
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;
+  // DEBUG
+  std::chrono::nanoseconds last_receive_time_ = {};
+  std::chrono::nanoseconds last_receive_time_utc_ = {};
 };
 
 }  // namespace matcher
