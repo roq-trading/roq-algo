@@ -1,4 +1,4 @@
-set(TARGET_NAME ${PROJECT_NAME}-collector)
+set(TARGET_NAME ${PROJECT_NAME}-reporter)
 
 set(SOURCES factory.cpp summary.cpp)
 

@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "roq/client/collector.hpp"
+#include "roq/client.hpp"
 
 namespace roq {
 namespace algo {
-namespace collector {
+namespace reporter {
 
 struct ROQ_PUBLIC Factory final {
   enum class Type {
@@ -18,9 +18,9 @@ struct ROQ_PUBLIC Factory final {
     SUMMARY,
   };
 
-  static std::unique_ptr<client::Collector> create(Type);
+  static std::unique_ptr<client::Simulator2::Reporter> create(Type);
 };
 
-}  // namespace collector
+}  // namespace reporter
 }  // namespace algo
 }  // namespace roq

@@ -1,26 +1,28 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#include "roq/algo/collector/factory.hpp"
+#include "roq/algo/reporter/factory.hpp"
 
 #include "roq/logging.hpp"
 
-#include "roq/algo/collector/summary.hpp"
+#include "roq/algo/reporter/summary.hpp"
 
 using namespace std::literals;
 
 namespace roq {
 namespace algo {
-namespace collector {
+namespace reporter {
 
 // === HELPERS ===
 
 namespace {
-struct None final : public client::Collector {};
+struct None final : public client::Simulator2::Reporter {
+  virtual void print() const override {}
+};
 }  // namespace
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<client::Collector> Factory::create(Type type) {
+std::unique_ptr<client::Simulator2::Reporter> Factory::create(Type type) {
   switch (type) {
     using enum Factory::Type;
     case NONE:
@@ -31,6 +33,6 @@ std::unique_ptr<client::Collector> Factory::create(Type type) {
   log::fatal("Unexpected: type={}"sv, magic_enum::enum_name(type));
 }
 
-}  // namespace collector
+}  // namespace reporter
 }  // namespace algo
 }  // namespace roq
