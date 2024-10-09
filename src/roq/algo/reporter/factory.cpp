@@ -15,20 +15,20 @@ namespace reporter {
 // === HELPERS ===
 
 namespace {
-struct None final : public client::Reporter {
+struct None final : public Handler {
   virtual void print() const override {}
 };
 }  // namespace
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<client::Reporter> Factory::create(Type type) {
+std::unique_ptr<Handler> Factory::create(Type type) {
   switch (type) {
     using enum Factory::Type;
     case NONE:
       return std::make_unique<None>();
     case SUMMARY:
-      return std::make_unique<Summary>();
+      return Summary::create();
   }
   log::fatal("Unexpected: type={}"sv, magic_enum::enum_name(type));
 }

@@ -12,13 +12,13 @@ namespace roq {
 namespace algo {
 namespace reporter {
 
-struct ROQ_PUBLIC Factory final {
-  enum class Type {
-    NONE,
-    SUMMARY,
+struct ROQ_PUBLIC Summary final {
+  struct Config final {
+    std::chrono::nanoseconds frequency = {};
   };
 
-  static std::unique_ptr<Handler> create(Type);
+  static std::unique_ptr<Handler> create();
+  static std::unique_ptr<Handler> create(Config const &);
 };
 
 }  // namespace reporter
