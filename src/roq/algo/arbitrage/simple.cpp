@@ -8,11 +8,6 @@
 #include "roq/utils/compare.hpp"
 #include "roq/utils/update.hpp"
 
-#include "roq/market/mbo/factory.hpp"
-#include "roq/market/mbp/factory.hpp"
-
-#include "roq/algo/utils/common.hpp"
-
 using namespace std::literals;
 
 namespace roq {
@@ -22,12 +17,17 @@ namespace arbitrage {
 // === HELPERS ===
 
 namespace {
-auto create_market_by_price(auto &instrument) {
-  return market::mbp::Factory::create(instrument.exchange, instrument.symbol);
-}
-
-auto create_market_by_order(auto &instrument) {
-  return market::mbo::Factory::create(instrument.exchange, instrument.symbol);
+auto to_support_type(MarketDataSource market_data_source) -> SupportType {
+  switch (market_data_source) {
+    using enum MarketDataSource;
+    case TOP_OF_BOOK:
+      return SupportType::TOP_OF_BOOK;
+    case MARKET_BY_PRICE:
+      return SupportType::MARKET_BY_PRICE;
+    case MARKET_BY_ORDER:
+      return SupportType::MARKET_BY_ORDER;
+  }
+  log::fatal("Unexpected"sv);
 }
 
 template <typename R>
@@ -81,7 +81,7 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)},
+    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{to_support_type(config.market_data_source)},
       threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
       cache_{cache}, instruments_{create_instruments<decltype(instruments_)>(config, config.market_data_source)},
       sources_{create_sources<decltype(sources_)>(instruments_)} {
@@ -114,7 +114,10 @@ void Simple::operator()(Event<Disconnected> const &event) {
   // note! no need to reset stream latencies
   // XXX FIXME TODO what about working orders ???
   // reset instruments
-  auto callback = [](auto &instrument) { instrument.state = {}; };
+  auto callback = [](auto &instrument) {
+    instrument.order_state = {};
+    instrument.order_id = {};
+  };
   get_instruments_by_source(event, callback);
 }
 
@@ -260,17 +263,17 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   if (strategy_id_ && strategy_id_ != order_update.strategy_id)
     return;
   auto &source = sources_[message_info.source];
-  auto is_order_complete = roq::utils::is_order_complete(order_update.order_status);
+  auto is_order_complete = utils::is_order_complete(order_update.order_status);
   auto callback = [&](auto &account, auto &instrument) {
     if (source.ready) {  // live
       if (is_order_complete) {
-        assert(instrument.state.order_state != OrderState::IDLE);
-        instrument.state.order_state = {};
-        instrument.state.order_id = {};
+        assert(instrument.order_state != OrderState::IDLE);
+        instrument.order_state = {};
+        instrument.order_id = {};
       } else {
-        if (instrument.state.order_state == OrderState::CREATE) {
-          instrument.state.order_state = OrderState::WORKING;
-          assert(instrument.state.order_id);
+        if (instrument.order_state == OrderState::CREATE) {
+          instrument.order_state = OrderState::WORKING;
+          assert(instrument.order_id);
         } else {
           // XXX FIXME cancel ???
         }
@@ -402,9 +405,9 @@ void Simple::update(MessageInfo const &message_info) {
 }
 
 bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrument) const {
-  if (instrument.state.order_state != OrderState::IDLE)
+  if (instrument.order_state != OrderState::IDLE)
     return false;
-  assert(instrument.state.order_id == 0);
+  assert(instrument.order_id == 0);
   // XXX FIXME TODO check rate-limit throttling
   auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
   auto &best = instrument.get_best();
@@ -419,9 +422,9 @@ bool Simple::can_trade(Side side, Instrument &instrument) {
       assert(false);
       break;
     case BUY:
-      return roq::utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument
+      return utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument
     case SELL:
-      return roq::utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument
+      return utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument
   }
   return false;
 }
@@ -429,14 +432,14 @@ bool Simple::can_trade(Side side, Instrument &instrument) {
 // XXX FIXME TODO support TimeInForce::IOC
 void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instrument &rhs) {
   auto helper = [this](auto side, auto &instrument) -> bool {
-    assert(instrument.state.order_state == OrderState::IDLE);
-    assert(instrument.state.order_id == 0);
-    instrument.state.order_state = OrderState::CREATE;
-    instrument.state.order_id = ++max_order_id_;
-    auto price = roq::utils::price_from_side(instrument.get_best(), roq::utils::invert(side));  // aggress other side
+    assert(instrument.order_state == OrderState::IDLE);
+    assert(instrument.order_id == 0);
+    instrument.order_state = OrderState::CREATE;
+    instrument.order_id = ++max_order_id_;
+    auto price = utils::price_from_side(instrument.get_best(), utils::invert(side));  // aggress other side
     auto create_order = CreateOrder{
         .account = instrument.account,
-        .order_id = instrument.state.order_id,
+        .order_id = instrument.order_id,
         .exchange = instrument.exchange,
         .symbol = instrument.symbol,
         .side = side,
@@ -458,15 +461,15 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
       dispatcher_.send(create_order, instrument.source);
       // XXX FIXME TODO record timestamp so we can rate-limit
     } catch (NotReady &) {
-      instrument.state.order_state = OrderState::IDLE;
-      instrument.state.order_id = {};
+      instrument.order_state = OrderState::IDLE;
+      instrument.order_id = {};
       return false;
     }
     return true;
   };
   if (can_trade(side, lhs) && helper(side, lhs)) {
     // note! only try second leg when first succeeds
-    if (!helper(roq::utils::invert(side), rhs)) {
+    if (!helper(utils::invert(side), rhs)) {
       // note! we should try-cancel first leg when second fails
       // XXX FIXME TODO cancel first leg
     }
@@ -508,12 +511,6 @@ void Simple::check(Event<T> const &event) {
     assert(message_info.receive_time_utc.count());
     // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
   }
-}
-
-// --- instrument ---
-
-Simple::Instrument::Instrument(algo::Instrument const &item, MarketDataSource market_data_source)
-    : source{item.source}, exchange{item.exchange}, symbol{item.symbol}, account{item.account}, market_{exchange, symbol, market_data_source} {
 }
 
 }  // namespace arbitrage

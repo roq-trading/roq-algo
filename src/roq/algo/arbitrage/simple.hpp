@@ -6,9 +6,6 @@
 
 #include "roq/utils/container.hpp"
 
-#include "roq/cache/market_by_order.hpp"
-#include "roq/cache/market_by_price.hpp"
-
 #include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
 
@@ -18,6 +15,7 @@
 #include "roq/algo/strategy/handler.hpp"
 
 #include "roq/algo/arbitrage/config.hpp"
+#include "roq/algo/arbitrage/instrument.hpp"
 
 namespace roq {
 namespace algo {
@@ -46,56 +44,6 @@ struct Simple final : public strategy::Handler {
 
   Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
-
-  enum class OrderState {
-    IDLE,
-    CREATE,
-    WORKING,
-    CANCEL,
-  };
-
-  struct State final {
-    // reference data
-    // double tick_size = NaN;
-    // double multiplier = NaN;
-    // double min_trade_vol = NaN;
-    // market data
-    // TradingStatus trading_status = {};
-    // Layer best;
-    // std::unique_ptr<cache::MarketByPrice> market_by_price;
-    // std::unique_ptr<cache::MarketByOrder> market_by_order;
-    // std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
-    // std::chrono::nanoseconds latency = {};
-    // order management
-    OrderState order_state = {};
-    uint64_t order_id = {};
-  };
-
-  struct Instrument final {
-    Instrument(algo::Instrument const &, MarketDataSource);
-
-    bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const { return market_.is_market_active(message_info, max_age); }
-
-    Layer const &get_best() const { return market_.get_best(); }
-
-    void operator()(Event<ReferenceData> const &event) { market_(event); }
-    void operator()(Event<MarketStatus> const &event) { market_(event); }
-
-    void operator()(Event<TopOfBook> const &event) { market_(event); }
-    void operator()(Event<MarketByPriceUpdate> const &event) { market_(event); }
-    void operator()(Event<MarketByOrderUpdate> const &event) { market_(event); }
-
-   public:
-    uint8_t const source = {};
-    std::string const exchange;
-    std::string const symbol;
-    std::string const account;
-    State state;
-    double position = 0.0;
-
-   private:
-    tools::Market market_;
-  };
 
  protected:
   void operator()(Event<Timer> const &) override;
@@ -193,57 +141,3 @@ struct Simple final : public strategy::Handler {
 }  // namespace arbitrage
 }  // namespace algo
 }  // namespace roq
-
-template <>
-struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
-  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::arbitrage::Simple::State const &value, format_context &context) const {
-    using namespace std::literals;
-    return fmt::format_to(
-        context.out(),
-        R"({{)"
-        // R"(tick_size={}, )"
-        // R"(multiplier={}, )"
-        // R"(min_trade_vol={}, )"
-        // R"(trading_status={}, )"
-        // R"(best={}, )"
-        // R"(exchange_time_utc={}, )"
-        // R"(latency={}, )"
-        R"(order_state={}, )"
-        R"(order_id={})"
-        R"(}})"sv,
-        // value.tick_size,
-        // value.multiplier,
-        // value.min_trade_vol,
-        // value.trading_status,
-        // value.best,
-        // value.exchange_time_utc,
-        // value.latency,
-        magic_enum::enum_name(value.order_state),
-        value.order_id);
-  }
-};
-
-template <>
-struct fmt::formatter<roq::algo::arbitrage::Simple::Instrument> {
-  constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::arbitrage::Simple::Instrument const &value, format_context &context) const {
-    using namespace std::literals;
-    return fmt::format_to(
-        context.out(),
-        R"({{)"
-        R"(source={}, )"
-        R"(exchange="{}", )"
-        R"(symbol="{}", )"
-        R"(account="{}", )"
-        R"(state={}, )"
-        R"(position={})"
-        R"(}})"sv,
-        value.source,
-        value.exchange,
-        value.symbol,
-        value.account,
-        value.state,
-        value.position);
-  }
-};
