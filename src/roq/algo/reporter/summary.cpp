@@ -100,51 +100,51 @@ struct Implementation final : public Handler {
 
   void print() const override {
     for (size_t source = 0; source < std::size(instruments_); ++source) {
-      log::info("source: {}"sv, source);
+      print_helper(0, "source"sv, source);
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
-        log::info("  exchange: {}"sv, exchange);
+        print_helper(2, "exchange"sv, exchange);
         for (auto &[symbol, instrument] : tmp_2) {
-          log::info("{: >{}}symbol: {}"sv, ""sv, 4, symbol);
-          log::info("{: >{}}market_data"sv, ""sv, 6);
-          log::info("{: >{}}reference_data"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.reference_data.total_count);
-          log::info("{: >{}}market_status"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.market_status.total_count);
-          log::info("{: >{}}top_of_book"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.top_of_book.total_count);
-          log::info("{: >{}}market_by_price_update"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.market_by_price_update.total_count);
-          log::info("{: >{}}market_by_order_update"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.market_by_order_update.total_count);
-          log::info("{: >{}}trade_summary"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.trade_summary.total_count);
-          log::info("{: >{}}statistics_update"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.statistics_update.total_count);
-          log::info("{: >{}}order_management"sv, ""sv, 6);
-          log::info("{: >{}}order_ack"sv, ""sv, 8);
-          log::info("{: >{}}accepted_count: {}"sv, ""sv, 10, instrument.order_ack.accepted_count);
-          log::info("{: >{}}rejected_count: {}"sv, ""sv, 10, instrument.order_ack.rejected_count);
-          log::info("{: >{}}order_update"sv, ""sv, 8);
-          log::info("{: >{}}buy_count: {}"sv, ""sv, 10, instrument.order_update.buy_count);
-          log::info("{: >{}}sell_count: {}"sv, ""sv, 10, instrument.order_update.sell_count);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.order_update.total_count);
-          log::info("{: >{}}trade_update"sv, ""sv, 8);
-          log::info("{: >{}}fills"sv, ""sv, 10);
-          log::info("{: >{}}buy_count: {}"sv, ""sv, 12, instrument.trade_update.fills.buy_count);
-          log::info("{: >{}}sell_count: {}"sv, ""sv, 12, instrument.trade_update.fills.sell_count);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 12, instrument.trade_update.fills.total_count);
-          log::info("{: >{}}buy_volume: {}"sv, ""sv, 12, instrument.trade_update.fills.buy_volume);
-          log::info("{: >{}}sell_volume: {}"sv, ""sv, 12, instrument.trade_update.fills.sell_volume);
-          log::info("{: >{}}total_volume: {}"sv, ""sv, 12, instrument.trade_update.fills.total_volume);
-          log::info("{: >{}}position_update"sv, ""sv, 8);
-          log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.position_update.total_count);
-          log::info("{: >{}}position_min: {}"sv, ""sv, 10, instrument.position_update.position_min);
-          log::info("{: >{}}position_max: {}"sv, ""sv, 10, instrument.position_update.position_max);
-          log::info("{: >{}}history"sv, ""sv, 8);
+          print_helper(4, "symbol"sv, symbol);
+          print_helper(6, "market_data"sv);
+          print_helper(8, "reference_data"sv);
+          print_helper(10, "total_count"sv, instrument.reference_data.total_count);
+          print_helper(8, "market_status"sv);
+          print_helper(10, "total_count"sv, instrument.market_status.total_count);
+          print_helper(8, "top_of_book"sv);
+          print_helper(10, "total_count"sv, instrument.top_of_book.total_count);
+          print_helper(8, "market_by_price_update"sv);
+          print_helper(10, "total_count"sv, instrument.market_by_price_update.total_count);
+          print_helper(8, "market_by_order_update"sv);
+          print_helper(10, "total_count"sv, instrument.market_by_order_update.total_count);
+          print_helper(8, "trade_summary"sv);
+          print_helper(10, "total_count"sv, instrument.trade_summary.total_count);
+          print_helper(8, "statistics_update"sv);
+          print_helper(10, "total_count"sv, instrument.statistics_update.total_count);
+          print_helper(6, "order_management"sv);
+          print_helper(8, "order_ack"sv);
+          print_helper(10, "accepted_count"sv, instrument.order_ack.accepted_count);
+          print_helper(10, "rejected_count"sv, instrument.order_ack.rejected_count);
+          print_helper(8, "order_update"sv);
+          print_helper(10, "buy_count"sv, instrument.order_update.buy_count);
+          print_helper(10, "sell_count"sv, instrument.order_update.sell_count);
+          print_helper(10, "total_count"sv, instrument.order_update.total_count);
+          print_helper(8, "trade_update"sv);
+          print_helper(10, "fills"sv);
+          print_helper(12, "buy_count"sv, instrument.trade_update.fills.buy_count);
+          print_helper(12, "sell_count"sv, instrument.trade_update.fills.sell_count);
+          print_helper(12, "total_count"sv, instrument.trade_update.fills.total_count);
+          print_helper(12, "buy_volume"sv, instrument.trade_update.fills.buy_volume);
+          print_helper(12, "sell_volume"sv, instrument.trade_update.fills.sell_volume);
+          print_helper(12, "total_volume"sv, instrument.trade_update.fills.total_volume);
+          print_helper(8, "position_update"sv);
+          print_helper(10, "total_count"sv, instrument.position_update.total_count);
+          print_helper(10, "position_min"sv, instrument.position_update.position_min);
+          print_helper(10, "position_max"sv, instrument.position_update.position_max);
+          print_helper(8, "history"sv);
           for (auto &[sample_period_utc, history] : instrument.history) {
-            log::info("{: >{}}sample_period_utc: {}"sv, ""sv, 10, sample_period_utc);
-            log::info("{: >{}}price: {}"sv, ""sv, 12, history.price);
+            print_helper(10, "sample_period_utc"sv, sample_period_utc);
+            print_helper(12, "price"sv, history.price);
           }
         }
       }
@@ -307,6 +307,9 @@ struct Implementation final : public Handler {
     auto &instrument = instruments_[message_info.source][value.exchange][value.symbol];
     callback(instrument);
   }
+
+  static void print_helper(size_t indent, std::string_view const &label) { fmt::print("{: >{}}{}\n"sv, ""sv, indent, label); }
+  static void print_helper(size_t indent, std::string_view const &label, auto const &value) { fmt::print("{: >{}}{}: {}\n"sv, ""sv, indent, label, value); }
 
   template <typename T>
   void check(Event<T> const &event) {
