@@ -86,8 +86,8 @@ struct Implementation final : public Handler {
     } trade_update;
     struct PositionUpdate final {
       size_t total_count = {};
-      double min_position = NaN;
-      double max_position = NaN;
+      double position_min = NaN;
+      double position_max = NaN;
     } position_update;
   };
 
@@ -134,8 +134,8 @@ struct Implementation final : public Handler {
           log::info("{: >{}}total_volume: {}"sv, ""sv, 12, instrument.trade_update.fills.total_volume);
           log::info("{: >{}}position_update"sv, ""sv, 8);
           log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.position_update.total_count);
-          log::info("{: >{}}min_position: {}"sv, ""sv, 10, instrument.position_update.min_position);
-          log::info("{: >{}}max_position: {}"sv, ""sv, 10, instrument.position_update.max_position);
+          log::info("{: >{}}position_min: {}"sv, ""sv, 10, instrument.position_update.position_min);
+          log::info("{: >{}}position_max: {}"sv, ""sv, 10, instrument.position_update.position_max);
         }
       }
     }
@@ -268,8 +268,8 @@ struct Implementation final : public Handler {
     auto callback = [&](auto &instrument) {
       ++instrument.position_update.total_count;
       auto position = position_update.long_quantity - position_update.short_quantity;
-      roq::utils::update_min(instrument.position_update.min_position, position);
-      roq::utils::update_max(instrument.position_update.max_position, position);
+      roq::utils::update_min(instrument.position_update.position_min, position);
+      roq::utils::update_max(instrument.position_update.position_max, position);
     };
     get_instrument(event, callback);
   }
