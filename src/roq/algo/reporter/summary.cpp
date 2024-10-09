@@ -38,7 +38,7 @@ namespace {
 // -- custom metrics
 
 struct Implementation final : public Handler {
-  explicit Implementation(Summary::Config const &) {}
+  explicit Implementation(Summary::Config const &config) : frequency_{config.frequency} {}
 
  protected:
   struct Instrument final {
@@ -89,6 +89,11 @@ struct Implementation final : public Handler {
       double position_min = NaN;
       double position_max = NaN;
     } position_update;
+    // history
+    struct History final {
+      double price = NaN;  // last
+    };
+    std::vector<std::pair<std::chrono::nanoseconds, History>> history;
   };
 
   // reporter
@@ -136,6 +141,11 @@ struct Implementation final : public Handler {
           log::info("{: >{}}total_count: {}"sv, ""sv, 10, instrument.position_update.total_count);
           log::info("{: >{}}position_min: {}"sv, ""sv, 10, instrument.position_update.position_min);
           log::info("{: >{}}position_max: {}"sv, ""sv, 10, instrument.position_update.position_max);
+          log::info("{: >{}}history"sv, ""sv, 8);
+          for (auto &[sample_period_utc, history] : instrument.history) {
+            log::info("{: >{}}sample_period_utc: {}"sv, ""sv, 10, sample_period_utc);
+            log::info("{: >{}}price: {}"sv, ""sv, 12, history.price);
+          }
         }
       }
     }
@@ -167,8 +177,22 @@ struct Implementation final : public Handler {
 
   void operator()(Event<TopOfBook> const &event) override {
     check(event);
-    // auto &[message_info, top_of_book] = event;
-    auto callback = [&](auto &instrument) { ++instrument.top_of_book.total_count; };
+    auto &[message_info, top_of_book] = event;
+    auto callback = [&](auto &instrument) {
+      ++instrument.top_of_book.total_count;
+      // XXX FIXME TODO generalize this so we can use any market data source
+      auto mid_price = 0.5 * (top_of_book.layer.bid_price + top_of_book.layer.ask_price);  // XXX FIXME TODO deal with one-sided and missing
+      assert(sample_period_utc_.count());
+      if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
+        auto history = Instrument::History{
+            .price = mid_price,
+        };
+        instrument.history.emplace_back(sample_period_utc_, std::move(history));
+      } else {
+        auto &history = instrument.history[std::size(instrument.history) - 1].second;
+        history.price = mid_price;
+      }
+    };
     get_instrument(event, callback);
   }
 
@@ -318,13 +342,22 @@ struct Implementation final : public Handler {
     } else {
       assert(message_info.receive_time_utc.count());
       // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
+      // ...
+      auto sample_period_utc = (message_info.receive_time_utc / frequency_) * frequency_;
+      // note! the realtime isn't guaranteed to be monotonic and we must therefore protect against time-inversion
+      if (sample_period_utc_ < sample_period_utc) {
+        sample_period_utc_ = sample_period_utc;
+        log::warn("HERE sample_period_utc={}"sv, sample_period_utc_);
+      }
     }
   }
 
  private:
+  std::chrono::nanoseconds const frequency_;
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, Instrument>>> instruments_;
   std::chrono::nanoseconds last_receive_time_ = {};
   std::chrono::nanoseconds last_receive_time_utc_ = {};
+  std::chrono::nanoseconds sample_period_utc_ = {};
 };
 }  // namespace
 
