@@ -12,6 +12,8 @@
 #include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
 
+#include "roq/algo/tools/market.hpp"
+
 #include "roq/algo/strategy/dispatcher.hpp"
 #include "roq/algo/strategy/handler.hpp"
 
@@ -54,29 +56,45 @@ struct Simple final : public strategy::Handler {
 
   struct State final {
     // reference data
-    double tick_size = NaN;
-    double multiplier = NaN;
-    double min_trade_vol = NaN;
+    // double tick_size = NaN;
+    // double multiplier = NaN;
+    // double min_trade_vol = NaN;
     // market data
-    TradingStatus trading_status = {};
-    Layer best;
-    std::unique_ptr<cache::MarketByPrice> market_by_price;
-    std::unique_ptr<cache::MarketByOrder> market_by_order;
-    std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
-    std::chrono::nanoseconds latency = {};
+    // TradingStatus trading_status = {};
+    // Layer best;
+    // std::unique_ptr<cache::MarketByPrice> market_by_price;
+    // std::unique_ptr<cache::MarketByOrder> market_by_order;
+    // std::chrono::nanoseconds exchange_time_utc = {};  // latest market data update
+    // std::chrono::nanoseconds latency = {};
     // order management
     OrderState order_state = {};
     uint64_t order_id = {};
   };
 
   struct Instrument final {
+    Instrument(algo::Instrument const &, MarketDataSource);
+
+    bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const { return market_.is_market_active(message_info, max_age); }
+
+    Layer const &get_best() const { return market_.get_best(); }
+
+    void operator()(Event<ReferenceData> const &event) { market_(event); }
+    void operator()(Event<MarketStatus> const &event) { market_(event); }
+
+    void operator()(Event<TopOfBook> const &event) { market_(event); }
+    void operator()(Event<MarketByPriceUpdate> const &event) { market_(event); }
+    void operator()(Event<MarketByOrderUpdate> const &event) { market_(event); }
+
+   public:
     uint8_t const source = {};
     std::string const exchange;
     std::string const symbol;
     std::string const account;
-    // private:
     State state;
     double position = 0.0;
+
+   private:
+    tools::Market market_;
   };
 
  protected:
@@ -100,7 +118,6 @@ struct Simple final : public strategy::Handler {
   void operator()(Event<TopOfBook> const &) override;
   void operator()(Event<MarketByPriceUpdate> const &) override;
   void operator()(Event<MarketByOrderUpdate> const &) override;
-  void operator()(Event<TradeSummary> const &) override;
 
   void operator()(Event<OrderAck> const &, cache::Order const &) override;
   void operator()(Event<OrderUpdate> const &, cache::Order const &) override;
@@ -185,23 +202,23 @@ struct fmt::formatter<roq::algo::arbitrage::Simple::State> {
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(tick_size={}, )"
-        R"(multiplier={}, )"
-        R"(min_trade_vol={}, )"
-        R"(trading_status={}, )"
-        R"(best={}, )"
-        R"(exchange_time_utc={}, )"
-        R"(latency={}, )"
+        // R"(tick_size={}, )"
+        // R"(multiplier={}, )"
+        // R"(min_trade_vol={}, )"
+        // R"(trading_status={}, )"
+        // R"(best={}, )"
+        // R"(exchange_time_utc={}, )"
+        // R"(latency={}, )"
         R"(order_state={}, )"
         R"(order_id={})"
         R"(}})"sv,
-        value.tick_size,
-        value.multiplier,
-        value.min_trade_vol,
-        value.trading_status,
-        value.best,
-        value.exchange_time_utc,
-        value.latency,
+        // value.tick_size,
+        // value.multiplier,
+        // value.min_trade_vol,
+        // value.trading_status,
+        // value.best,
+        // value.exchange_time_utc,
+        // value.latency,
         magic_enum::enum_name(value.order_state),
         value.order_id);
   }

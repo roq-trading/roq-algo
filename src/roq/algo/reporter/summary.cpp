@@ -13,6 +13,8 @@
 
 #include "roq/utils/container.hpp"
 
+#include "roq/algo/tools/market.hpp"
+
 using namespace std::literals;
 
 namespace roq {
@@ -23,7 +25,8 @@ namespace reporter {
 
 namespace {
 auto const DEFAULT_CONFIG = Summary::Config{
-    .frequency = 1min,
+    .market_data_source = MarketDataSource::TOP_OF_BOOK,
+    .sample_frequency = 1min,
 };
 }
 
@@ -38,10 +41,15 @@ namespace {
 // -- custom metrics
 
 struct Implementation final : public Handler {
-  explicit Implementation(Summary::Config const &config) : frequency_{config.frequency} {}
+  explicit Implementation(Summary::Config const &config) : market_data_source_{config.market_data_source}, sample_frequency_{config.sample_frequency} {}
 
  protected:
   struct Instrument final {
+    Instrument(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
+        : market{exchange, symbol, market_data_source} {}
+
+    tools::Market market;
+
     // market data
     struct ReferenceData final {
       size_t total_count = {};
@@ -163,63 +171,60 @@ struct Implementation final : public Handler {
 
   void operator()(Event<ReferenceData> const &event) override {
     check(event);
-    // auto &[message_info, reference_data] = event;
-    auto callback = [&](auto &instrument) { ++instrument.reference_data.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.reference_data.total_count;
+      instrument.market(event);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<MarketStatus> const &event) override {
     check(event);
-    // auto &[message_info, market_status] = event;
-    auto callback = [&](auto &instrument) { ++instrument.market_status.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.market_status.total_count;
+      instrument.market(event);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<TopOfBook> const &event) override {
     check(event);
-    auto &[message_info, top_of_book] = event;
     auto callback = [&](auto &instrument) {
       ++instrument.top_of_book.total_count;
-      // XXX FIXME TODO generalize this so we can use any market data source
-      auto mid_price = 0.5 * (top_of_book.layer.bid_price + top_of_book.layer.ask_price);  // XXX FIXME TODO deal with one-sided and missing
-      assert(sample_period_utc_.count());
-      if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
-        auto history = Instrument::History{
-            .price = mid_price,
-        };
-        instrument.history.emplace_back(sample_period_utc_, std::move(history));
-      } else {
-        auto &history = instrument.history[std::size(instrument.history) - 1].second;
-        history.price = mid_price;
-      }
+      if (instrument.market(event))
+        update_best(instrument);
     };
     get_instrument(event, callback);
   }
 
   void operator()(Event<MarketByPriceUpdate> const &event) override {
     check(event);
-    // auto &[message_info, market_by_price_update] = event;
-    auto callback = [&](auto &instrument) { ++instrument.market_by_price_update.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.market_by_price_update.total_count;
+      if (instrument.market(event))
+        update_best(instrument);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<MarketByOrderUpdate> const &event) override {
     check(event);
-    // auto &[message_info, market_by_order_update] = event;
-    auto callback = [&](auto &instrument) { ++instrument.market_by_order_update.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.market_by_order_update.total_count;
+      if (instrument.market(event))
+        update_best(instrument);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<TradeSummary> const &event) override {
     check(event);
-    // auto &[message_info, trade_summary] = event;
     auto callback = [&](auto &instrument) { ++instrument.trade_summary.total_count; };
     get_instrument(event, callback);
   }
 
   void operator()(Event<StatisticsUpdate> const &event) override {
     check(event);
-    // auto &[message_info, statistics_update] = event;
     auto callback = [&](auto &instrument) { ++instrument.statistics_update.total_count; };
     get_instrument(event, callback);
   }
@@ -304,8 +309,30 @@ struct Implementation final : public Handler {
   void get_instrument(Event<T> const &event, Callback callback) {
     auto &[message_info, value] = event;
     instruments_.resize(std::max<size_t>(message_info.source + 1, std::size(instruments_)));
-    auto &instrument = instruments_[message_info.source][value.exchange][value.symbol];
+    auto &tmp = instruments_[message_info.source][value.exchange];
+    auto iter = tmp.find(value.symbol);
+    if (iter == std::end(tmp)) [[unlikely]] {
+      auto res = tmp.try_emplace(value.symbol, value.exchange, value.symbol, MarketDataSource::TOP_OF_BOOK);
+      assert(res.second);
+      iter = res.first;
+    }
+    auto &instrument = (*iter).second;
     callback(instrument);
+  }
+
+  void update_best(Instrument &instrument) {
+    auto &best = instrument.market.get_best();
+    auto mid_price = 0.5 * (best.bid_price + best.ask_price);  // XXX FIXME TODO deal with one-sided and missing
+    assert(sample_period_utc_.count());
+    if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
+      auto history = Instrument::History{
+          .price = mid_price,
+      };
+      instrument.history.emplace_back(sample_period_utc_, std::move(history));
+    } else {
+      auto &history = instrument.history[std::size(instrument.history) - 1].second;
+      history.price = mid_price;
+    }
   }
 
   static void print_helper(size_t indent, std::string_view const &label) { fmt::print("{: >{}}{}\n"sv, ""sv, indent, label); }
@@ -346,7 +373,7 @@ struct Implementation final : public Handler {
       assert(message_info.receive_time_utc.count());
       // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
       // ...
-      auto sample_period_utc = (message_info.receive_time_utc / frequency_) * frequency_;
+      auto sample_period_utc = (message_info.receive_time_utc / sample_frequency_) * sample_frequency_;
       // note! the realtime isn't guaranteed to be monotonic and we must therefore protect against time-inversion
       if (sample_period_utc_ < sample_period_utc) {
         sample_period_utc_ = sample_period_utc;
@@ -356,7 +383,8 @@ struct Implementation final : public Handler {
   }
 
  private:
-  std::chrono::nanoseconds const frequency_;
+  MarketDataSource const market_data_source_;
+  std::chrono::nanoseconds const sample_frequency_;
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, Instrument>>> instruments_;
   std::chrono::nanoseconds last_receive_time_ = {};
   std::chrono::nanoseconds last_receive_time_utc_ = {};

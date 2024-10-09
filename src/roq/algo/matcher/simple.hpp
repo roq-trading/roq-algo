@@ -5,13 +5,10 @@
 #include <limits>
 #include <vector>
 
-#include "roq/cache/market_by_order.hpp"
-#include "roq/cache/market_by_price.hpp"
-#include "roq/cache/market_status.hpp"
-#include "roq/cache/top_of_book.hpp"
-
 #include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
+
+#include "roq/algo/tools/market.hpp"
 
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
@@ -56,7 +53,7 @@ struct Simple final : public Handler {
 
   // market
 
-  void operator()(Event<Layer> const &);
+  void match_resting_orders(MessageInfo const &);
 
   // orders
 
@@ -68,6 +65,9 @@ struct Simple final : public Handler {
   void dispatch_trade_update(MessageInfo const &, cache::Order const &, Fill const &);
 
   // utils
+
+  template <typename T>
+  void update_exchange_time_utc(Event<T> const &);
 
   bool is_aggressive(Side, int64_t price) const;
 
@@ -88,13 +88,7 @@ struct Simple final : public Handler {
   // cache
   Cache &cache_;
   // market
-  std::chrono::nanoseconds exchange_time_utc_ = {};
-  double tick_size_ = NaN;
-  Precision precision_ = {};
-  cache::MarketStatus market_status_;
-  cache::TopOfBook top_of_book_;
-  std::unique_ptr<cache::MarketByPrice> market_by_price_;
-  std::unique_ptr<cache::MarketByOrder> market_by_order_;
+  tools::Market market_;
   struct {
     std::pair<int64_t, int64_t> units = {
         std::numeric_limits<int64_t>::min(),
@@ -102,6 +96,7 @@ struct Simple final : public Handler {
     };
     std::pair<double, double> external = {NaN, NaN};
   } best_;
+  std::chrono::nanoseconds exchange_time_utc_ = {};
   // orders
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;

@@ -31,28 +31,15 @@ auto create_market_by_order(auto &instrument) {
 }
 
 template <typename R>
-auto create_instruments(auto &config) {
+auto create_instruments(auto &config, auto market_data_source) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
   auto size = std::size(config.instruments);
   assert(size >= 2);
   if (size < 2)
     log::fatal("Unexpected: len(config.instruments)={}"sv, size);
-  for (size_t i = 0; i < size; ++i) {
-    auto &item = config.instruments[i];
-    Simple::State state;
-    state.market_by_price = create_market_by_price(item);
-    state.market_by_order = create_market_by_order(item);
-    auto instrument = Simple::Instrument{
-        .source = item.source,
-        .exchange{item.exchange},
-        .symbol{item.symbol},
-        .account{item.account},
-        .state{std::move(state)},
-    };
-    log::info("[{}] instrument={}"sv, i, instrument);
-    result.emplace_back(std::move(instrument));
-  }
+  for (auto &item : config.instruments)
+    result.emplace_back(item, market_data_source);
   return result;
 }
 
@@ -96,7 +83,8 @@ auto create_sources(auto &instruments) {
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
     : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{utils::to_support_type(config.market_data_source)},
       threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
-      cache_{cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
+      cache_{cache}, instruments_{create_instruments<decltype(instruments_)>(config, config.market_data_source)},
+      sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }
@@ -196,14 +184,7 @@ void Simple::operator()(Event<GatewayStatus> const &event) {
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   check(event);
-  auto &[message_info, reference_data] = event;
-  auto callback = [&](auto &instrument) {
-    roq::utils::update(instrument.state.tick_size, reference_data.tick_size);
-    roq::utils::update(instrument.state.multiplier, reference_data.multiplier);
-    roq::utils::update(instrument.state.min_trade_vol, reference_data.min_trade_vol);
-    (*instrument.state.market_by_price)(event);
-    (*instrument.state.market_by_order)(event);
-  };
+  auto callback = [&](auto &instrument) { instrument(event); };
   get_instrument(event, callback);
 }
 
@@ -211,8 +192,7 @@ void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
   auto &[message_info, market_status] = event;
   auto callback = [&](auto &instrument) {
-    roq::utils::update_max(instrument.state.exchange_time_utc, market_status.exchange_time_utc);
-    roq::utils::update(instrument.state.trading_status, market_status.trading_status);
+    instrument(event);
     update(message_info);
   };
   get_instrument(event, callback);
@@ -222,11 +202,7 @@ void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
   auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &instrument) {
-    roq::utils::update_max(instrument.state.exchange_time_utc, top_of_book.exchange_time_utc);
-    if (market_data_type_ == SupportType::TOP_OF_BOOK) {
-      roq::utils::update(instrument.state.best, top_of_book.layer);
-      update_latency(instrument.state.latency, event);
-    }
+    instrument(event);
     update(message_info);
   };
   get_instrument(event, callback);
@@ -236,12 +212,7 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
   auto &[message_info, market_by_price_update] = event;
   auto callback = [&](auto &instrument) {
-    roq::utils::update_max(instrument.state.exchange_time_utc, market_by_price_update.exchange_time_utc);
-    (*instrument.state.market_by_price)(event);
-    if (market_data_type_ == SupportType::MARKET_BY_PRICE) {
-      (*instrument.state.market_by_price).extract({&instrument.state.best, 1}, true);
-      update_latency(instrument.state.latency, event);
-    }
+    instrument(event);
     update(message_info);
   };
   get_instrument(event, callback);
@@ -251,22 +222,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
   auto &[message_info, market_by_order_update] = event;
   auto callback = [&](auto &instrument) {
-    roq::utils::update_max(instrument.state.exchange_time_utc, market_by_order_update.exchange_time_utc);
-    (*instrument.state.market_by_order)(event);
-    if (market_data_type_ == SupportType::MARKET_BY_ORDER) {
-      (*instrument.state.market_by_order).extract_2({&instrument.state.best, 1});
-      update_latency(instrument.state.latency, event);
-    }
-    update(message_info);
-  };
-  get_instrument(event, callback);
-}
-
-void Simple::operator()(Event<TradeSummary> const &event) {
-  check(event);
-  auto &[message_info, trade_summary] = event;
-  auto callback = [&](auto &instrument) {
-    roq::utils::update_max(instrument.state.exchange_time_utc, trade_summary.exchange_time_utc);
+    instrument(event);
     update(message_info);
   };
   get_instrument(event, callback);
@@ -424,11 +380,13 @@ void Simple::update(MessageInfo const &message_info) {
   for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
     auto &lhs = instruments_[i];
     auto lhs_ready = is_ready(message_info, lhs);
+    auto &lhs_best = lhs.get_best();
     for (size_t j = i + 1; j < std::size(instruments_); ++j) {
       auto &rhs = instruments_[j];
       auto rhs_ready = is_ready(message_info, rhs);
-      auto spread_1 = lhs.state.best.bid_price - rhs.state.best.ask_price;  // sell lhs, buy rhs
-      auto spread_2 = rhs.state.best.bid_price - lhs.state.best.ask_price;  // sell rhs, buy lhs
+      auto &rhs_best = rhs.get_best();
+      auto spread_1 = lhs_best.bid_price - rhs_best.ask_price;  // sell lhs, buy rhs
+      auto spread_2 = rhs_best.bid_price - lhs_best.ask_price;  // sell rhs, buy lhs
       auto trigger_1 = threshold_ < spread_1;
       auto trigger_2 = threshold_ < spread_2;
       // log::debug("[{}][{}] {} ({}) {} ({})"sv, i, j, spread_1, trigger_1, spread_2, trigger_2);
@@ -448,15 +406,10 @@ bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrum
     return false;
   assert(instrument.state.order_id == 0);
   // XXX FIXME TODO check rate-limit throttling
-  auto is_market_active = [&]() {
-    if (instrument.state.trading_status != TradingStatus{})
-      return instrument.state.trading_status == TradingStatus::OPEN;
-    // use age of market data update as fallback if exchange doesn't support trading status
-    return (message_info.receive_time_utc - instrument.state.exchange_time_utc) < max_age_;
-  };
   auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
-  return is_market_active() && has_liquidity(instrument.state.best.bid_price, instrument.state.best.bid_quantity) &&
-         has_liquidity(instrument.state.best.ask_price, instrument.state.best.ask_quantity);
+  auto &best = instrument.get_best();
+  return instrument.is_market_active(message_info, max_age_) && has_liquidity(best.bid_price, best.bid_quantity) &&
+         has_liquidity(best.ask_price, best.ask_quantity);
 }
 
 bool Simple::can_trade(Side side, Instrument &instrument) {
@@ -480,7 +433,7 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
     assert(instrument.state.order_id == 0);
     instrument.state.order_state = OrderState::CREATE;
     instrument.state.order_id = ++max_order_id_;
-    auto price = roq::utils::price_from_side(instrument.state.best, roq::utils::invert(side));  // aggress other side
+    auto price = roq::utils::price_from_side(instrument.get_best(), roq::utils::invert(side));  // aggress other side
     auto create_order = CreateOrder{
         .account = instrument.account,
         .order_id = instrument.state.order_id,
@@ -555,6 +508,12 @@ void Simple::check(Event<T> const &event) {
     assert(message_info.receive_time_utc.count());
     // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
   }
+}
+
+// --- instrument ---
+
+Simple::Instrument::Instrument(algo::Instrument const &item, MarketDataSource market_data_source)
+    : source{item.source}, exchange{item.exchange}, symbol{item.symbol}, account{item.account}, market_{exchange, symbol, market_data_source} {
 }
 
 }  // namespace arbitrage

@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include "roq/algo/market_data_source.hpp"
+
 #include "roq/algo/reporter/handler.hpp"
 
 namespace roq {
@@ -14,7 +16,8 @@ namespace reporter {
 
 struct ROQ_PUBLIC Summary final {
   struct Config final {
-    std::chrono::nanoseconds frequency = {};
+    MarketDataSource market_data_source;
+    std::chrono::nanoseconds sample_frequency = {};
   };
 
   static std::unique_ptr<Handler> create();
