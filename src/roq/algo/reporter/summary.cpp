@@ -312,7 +312,7 @@ struct Implementation final : public Handler {
     auto &tmp = instruments_[message_info.source][value.exchange];
     auto iter = tmp.find(value.symbol);
     if (iter == std::end(tmp)) [[unlikely]] {
-      auto res = tmp.try_emplace(value.symbol, value.exchange, value.symbol, MarketDataSource::TOP_OF_BOOK);
+      auto res = tmp.try_emplace(value.symbol, value.exchange, value.symbol, market_data_source_);
       assert(res.second);
       iter = res.first;
     }
