@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "roq/algo/cache.hpp"
+#include "roq/algo/order_cache.hpp"
 
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
@@ -21,7 +21,7 @@ struct ROQ_PUBLIC Factory final {
     SIMPLE,
   };
 
-  static std::unique_ptr<Handler> create(Type, Dispatcher &, Config const &, Cache &);
+  static std::unique_ptr<Handler> create(Type, Dispatcher &, Config const &, OrderCache &);
 };
 
 }  // namespace matcher

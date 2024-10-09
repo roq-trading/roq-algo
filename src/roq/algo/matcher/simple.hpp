@@ -5,8 +5,8 @@
 #include <limits>
 #include <vector>
 
-#include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
+#include "roq/algo/order_cache.hpp"
 
 #include "roq/algo/tools/market.hpp"
 
@@ -31,7 +31,7 @@ namespace matcher {
 // - limit orders
 
 struct Simple final : public Handler {
-  Simple(Dispatcher &, Config const &, Cache &);
+  Simple(Dispatcher &, Config const &, OrderCache &);
 
   Simple(Simple const &) = delete;
 
@@ -86,7 +86,7 @@ struct Simple final : public Handler {
   // config
   MarketDataSource const market_data_source_;
   // cache
-  Cache &cache_;
+  OrderCache &order_cache_;
   // market
   tools::Market market_;
   struct {

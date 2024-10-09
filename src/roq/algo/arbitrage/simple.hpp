@@ -6,10 +6,8 @@
 
 #include "roq/utils/container.hpp"
 
-#include "roq/algo/cache.hpp"
 #include "roq/algo/market_data_source.hpp"
-
-#include "roq/algo/tools/market.hpp"
+#include "roq/algo/order_cache.hpp"
 
 #include "roq/algo/strategy/dispatcher.hpp"
 #include "roq/algo/strategy/handler.hpp"
@@ -40,7 +38,7 @@ namespace arbitrage {
 struct Simple final : public strategy::Handler {
   using Dispatcher = strategy::Dispatcher;
 
-  Simple(Dispatcher &, Config const &, Cache &);
+  Simple(Dispatcher &, Config const &, OrderCache &);
 
   Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
@@ -128,7 +126,7 @@ struct Simple final : public strategy::Handler {
   double const min_position_0_;
   double const max_position_0_;
   // cache
-  Cache &cache_;
+  OrderCache &order_cache_;
   // state
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;

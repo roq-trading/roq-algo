@@ -80,10 +80,10 @@ auto create_sources(auto &instruments) {
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache)
+Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
     : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{to_support_type(config.market_data_source)},
       threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
-      cache_{cache}, instruments_{create_instruments<decltype(instruments_)>(config, config.market_data_source)},
+      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config, config.market_data_source)},
       sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));

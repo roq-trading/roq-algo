@@ -73,8 +73,8 @@ void try_match_helper(auto &container, auto compare, auto best, auto &cache, Cal
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Dispatcher &dispatcher, Config const &config, Cache &cache)
-    : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, cache_{cache},
+Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
+    : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, order_cache_{order_cache},
       market_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
 }
 
@@ -163,7 +163,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
         }
         log::fatal("Unexpected"sv);
       }();
-      auto external_trade_id = fmt::format("trd-{}"sv, cache_.get_next_trade_id());
+      auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
       auto fill = Fill{
           .exchange_time_utc = exchange_time_utc_,
           .external_trade_id = external_trade_id,
@@ -239,7 +239,7 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
   };
   auto matched_order = [&](auto &order) {
     assert(utils::compare(order.remaining_quantity, 0.0) > 0);
-    auto external_trade_id = fmt::format("trd-{}"sv, cache_.get_next_trade_id());
+    auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
     auto fill = Fill{
         .exchange_time_utc = exchange_time_utc_,
         .external_trade_id = external_trade_id,
@@ -406,13 +406,13 @@ void Simple::try_match(Side side, Callback callback) {
     case BUY: {
       auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
       // log::debug("BUY"sv);
-      try_match_helper(sell_, compare, best_.units.first, cache_, callback);
+      try_match_helper(sell_, compare, best_.units.first, order_cache_, callback);
       break;
     }
     case SELL: {
       // log::debug("SELL"sv);
       auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
-      try_match_helper(buy_, compare, best_.units.second, cache_, callback);
+      try_match_helper(buy_, compare, best_.units.second, order_cache_, callback);
       break;
     }
   }

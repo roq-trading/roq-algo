@@ -7,7 +7,7 @@
 namespace roq {
 namespace algo {
 
-struct ROQ_PUBLIC Cache {
+struct ROQ_PUBLIC OrderCache {
   template <typename Callback>
   bool get_order(uint64_t order_id, Callback callback) {
     auto order = get_order_helper(order_id);
@@ -17,7 +17,7 @@ struct ROQ_PUBLIC Cache {
     return true;
   }
 
-  virtual uint64_t get_next_trade_id() = 0;
+  virtual uint64_t get_next_trade_id() = 0;  // note! only used by matcher
 
  private:
   virtual cache::Order *get_order_helper(uint64_t order_id) = 0;

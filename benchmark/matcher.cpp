@@ -23,10 +23,10 @@ void BM_tools_Simple_add(benchmark::State &state) {
     void operator()(Event<OrderUpdate> const &) override {}
     void operator()(Event<TradeUpdate> const &) override {}
   } dispatcher;
-  struct MyCache final : public Cache {
+  struct MyOrderCache final : public OrderCache {
     cache::Order *get_order_helper([[maybe_unused]] uint64_t order_id) override { return nullptr; }
     uint64_t get_next_trade_id() override { return {}; }
-  } cache;
+  } order_cache;
   auto config = Config{
       .instrument{
           .source = 0,
@@ -37,7 +37,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
   for (auto _ : state) {
-    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, cache);
+    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, order_cache);
   }
 }
 

@@ -12,8 +12,8 @@ namespace arbitrage {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<strategy::Handler> Factory::create(strategy::Dispatcher &dispatcher, Config const &config, Cache &cache) {
-  return std::make_unique<Simple>(dispatcher, config, cache);
+std::unique_ptr<strategy::Handler> Factory::create(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache) {
+  return std::make_unique<Simple>(dispatcher, config, order_cache);
 }
 
 }  // namespace arbitrage
