@@ -159,7 +159,8 @@ void Simple::operator()(Event<StreamStatus> const &event) {
   }
 }
 
-// XXX FIXME TODO this is the real update (**NOT** correlated with simulated latency assumptions)
+// note! this is only a sample typically based on ping-pong between gateway and some exchange end-point
+// XXX FIXME TODO this is the real event (**NOT** correlated with simulated latency assumptions)
 void Simple::operator()(Event<ExternalLatency> const &event) {
   check(event);
   auto &[message_info, external_latency] = event;
@@ -240,7 +241,7 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
         break;
       case BROKER:
       case EXCHANGE:
-        assert(order_ack.round_trip_latency > 0ns);
+        assert(order_ack.round_trip_latency > 0ns);  // note! this is the real round-trip latency
         break;
     }
   };
@@ -300,7 +301,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
           break;
         }
         case STALE:
-          // note! gateway hs lost connection to exchange and we get notified ==> wait for gateway to reconnect and send snapshot
+          // note! gateway has lost connection to exchange and we get notified ==> wait for gateway to reconnect and send snapshot
           break;
       }
     };

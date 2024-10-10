@@ -6,6 +6,8 @@
 
 #include "roq/logging.hpp"
 
+#include "roq/utils/common.hpp"
+
 using namespace std::literals;
 
 namespace roq {
@@ -15,7 +17,8 @@ namespace tools {
 // === IMPLEMENTATION ===
 
 std::pair<double, double> PositionTracker::compute_pnl(double current_price, double multiplier) const {
-  return {};
+  auto profit = current_price * position_ - cost_;  // note! simplified calculation of p&l
+  return {position_, profit};
 }
 
 void PositionTracker::operator()(Event<TradeUpdate> const &event) {
@@ -28,9 +31,15 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
     case SNAPSHOT:
       assert(false);  // XXX FIXME TODO support download
       break;
-    case INCREMENTAL:
-      // XXX FIXME TODO implement
+    case INCREMENTAL: {
+      auto sign = utils::sign(trade_update.side);
+      for (auto &item : trade_update.fills) {
+        auto amount = item.quantity * sign;
+        position_ += amount;
+        cost_ += amount * item.price;
+      }
       break;
+    }
     case STALE:
       assert(false);  // note! should never happen
       break;

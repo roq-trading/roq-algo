@@ -14,6 +14,7 @@
 #include "roq/utils/container.hpp"
 
 #include "roq/algo/tools/market_data.hpp"
+#include "roq/algo/tools/position_tracker.hpp"
 #include "roq/algo/tools/time_checker.hpp"
 
 using namespace std::literals;
@@ -49,7 +50,41 @@ struct Implementation final : public Handler {
     Instrument(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
         : market_data{exchange, symbol, market_data_source} {}
 
+    void operator()(Event<TradeUpdate> const &event) {
+      position_tracker(event);
+      auto &[message_info, trade_update_2] = event;
+      for (auto &fill : trade_update_2.fills) {
+        assert(roq::utils::compare(fill.quantity, 0.0) > 0);
+        switch (trade_update_2.side) {
+          using enum Side;
+          case UNDEFINED:
+            assert(false);
+            break;
+          case BUY:
+            ++trade_update.fills.buy_count;
+            trade_update.fills.buy_volume += fill.quantity;
+            break;
+          case SELL:
+            ++trade_update.fills.sell_count;
+            trade_update.fills.sell_volume += fill.quantity;
+            break;
+        }
+        ++trade_update.fills.total_count;
+        trade_update.fills.total_volume += fill.quantity;
+      }
+    }
+
+    void operator()(Event<PositionUpdate> const &event) {
+      position_tracker(event);
+      auto &[message_info, position_update_2] = event;
+      ++position_update.total_count;
+      auto position = position_update_2.long_quantity - position_update_2.short_quantity;
+      roq::utils::update_min(position_update.position_min, position);
+      roq::utils::update_max(position_update.position_max, position);
+    }
+
     tools::MarketData market_data;
+    tools::PositionTracker position_tracker;
 
     // market data
     struct ReferenceData final {
@@ -101,6 +136,8 @@ struct Implementation final : public Handler {
     // history
     struct History final {
       double price = NaN;  // last
+      double position = NaN;
+      double profit = NaN;
     };
     std::vector<std::pair<std::chrono::nanoseconds, History>> history;
   };
@@ -154,6 +191,8 @@ struct Implementation final : public Handler {
           for (auto &[sample_period_utc, history] : instrument.history) {
             print_helper(10, "sample_period_utc"sv, sample_period_utc);
             print_helper(12, "price"sv, history.price);
+            print_helper(12, "position"sv, history.position);
+            print_helper(12, "profit"sv, history.profit);
           }
         }
       }
@@ -273,40 +312,13 @@ struct Implementation final : public Handler {
 
   void operator()(Event<TradeUpdate> const &event) override {
     check(event);
-    auto &[message_info, trade_update] = event;
-    auto callback = [&](auto &instrument) {
-      for (auto &fill : trade_update.fills) {
-        assert(roq::utils::compare(fill.quantity, 0.0) > 0);
-        switch (trade_update.side) {
-          using enum Side;
-          case UNDEFINED:
-            assert(false);
-            break;
-          case BUY:
-            ++instrument.trade_update.fills.buy_count;
-            instrument.trade_update.fills.buy_volume += fill.quantity;
-            break;
-          case SELL:
-            ++instrument.trade_update.fills.sell_count;
-            instrument.trade_update.fills.sell_volume += fill.quantity;
-            break;
-        }
-        ++instrument.trade_update.fills.total_count;
-        instrument.trade_update.fills.total_volume += fill.quantity;
-      }
-    };
+    auto callback = [&](auto &instrument) { instrument(event); };
     get_instrument(event, callback);
   }
 
   void operator()(Event<PositionUpdate> const &event) override {
     check(event);
-    auto &[message_info, position_update] = event;
-    auto callback = [&](auto &instrument) {
-      ++instrument.position_update.total_count;
-      auto position = position_update.long_quantity - position_update.short_quantity;
-      roq::utils::update_min(instrument.position_update.position_min, position);
-      roq::utils::update_max(instrument.position_update.position_max, position);
-    };
+    auto callback = [&](auto &instrument) { instrument(event); };
     get_instrument(event, callback);
   }
 
@@ -330,15 +342,20 @@ struct Implementation final : public Handler {
   void update_best(Instrument &instrument) {
     auto &top_of_book = instrument.market_data.top_of_book();
     auto mid_price = 0.5 * (top_of_book.bid_price + top_of_book.ask_price);  // XXX FIXME TODO deal with one-sided and missing
+    auto [position, profit] = instrument.position_tracker.compute_pnl(mid_price, 1.0);
     assert(sample_period_utc_.count());
     if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
       auto history = Instrument::History{
           .price = mid_price,
+          .position = position,
+          .profit = profit,
       };
       instrument.history.emplace_back(sample_period_utc_, std::move(history));
     } else {
       auto &history = instrument.history[std::size(instrument.history) - 1].second;
       history.price = mid_price;
+      history.position = position;
+      history.profit = profit;
     }
   }
 

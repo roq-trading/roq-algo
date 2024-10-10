@@ -14,7 +14,7 @@ namespace tools {
 
 struct PositionTracker final {
   double current_position() const { return current_position_; }
-  // note! returns {realized, unrealized}
+  // note! returns {position, profit}
   std::pair<double, double> compute_pnl(double current_price, double multiplier) const;
 
   void operator()(Event<TradeUpdate> const &);
@@ -33,6 +33,9 @@ struct PositionTracker final {
 
  private:
   double current_position_ = 0.0;
+  // ...
+  double position_ = 0.0;
+  double cost_ = 0.0;
 };
 
 }  // namespace tools
