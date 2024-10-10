@@ -14,6 +14,7 @@
 #include "roq/utils/container.hpp"
 
 #include "roq/algo/tools/market_data.hpp"
+#include "roq/algo/tools/time_checker.hpp"
 
 using namespace std::literals;
 
@@ -347,34 +348,16 @@ struct Implementation final : public Handler {
   template <typename T>
   void check(Event<T> const &event) {
     auto &[message_info, value] = event;
-    auto helper = [](auto &lhs, auto rhs) {
-      std::chrono::nanoseconds result;
-      if (lhs.count()) {
-        result = rhs - lhs;
-      } else {
-        result = {};
-      }
-      lhs = rhs;
-      return result;
-    };
-    auto diff = helper(last_receive_time_, message_info.receive_time);
-    auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);  // XXX FIXME TODO track by source
     log::debug(
-        "[{}:{}] receive_time={}({}), receive_time_utc={}({}), {}={}"sv,
+        "[{}:{}] receive_time={}, receive_time_utc={}, {}={}"sv,
         message_info.source,
         message_info.source_name,
         message_info.receive_time,
-        diff,
         message_info.receive_time_utc,
-        diff_utc,
         get_name<T>(),
         value);
-    assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
-    assert(message_info.receive_time.count());
-    assert(diff >= 0ns);
-    assert(message_info.receive_time_utc.count());
-    // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
-    // ...
+    time_checker_(event);
+    // sample period
     auto sample_period_utc = (message_info.receive_time_utc / sample_frequency_) * sample_frequency_;
     if (sample_period_utc_ < sample_period_utc)
       sample_period_utc_ = sample_period_utc;
@@ -384,9 +367,9 @@ struct Implementation final : public Handler {
   MarketDataSource const market_data_source_;
   std::chrono::nanoseconds const sample_frequency_;
   std::vector<utils::unordered_map<std::string, utils::unordered_map<std::string, Instrument>>> instruments_;
-  std::chrono::nanoseconds last_receive_time_ = {};
-  std::chrono::nanoseconds last_receive_time_utc_ = {};
   std::chrono::nanoseconds sample_period_utc_ = {};
+  // DEBUG
+  tools::TimeChecker time_checker_;
 };
 }  // namespace
 

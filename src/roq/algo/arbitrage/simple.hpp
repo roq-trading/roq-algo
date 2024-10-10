@@ -9,6 +9,8 @@
 #include "roq/algo/market_data_source.hpp"
 #include "roq/algo/order_cache.hpp"
 
+#include "roq/algo/tools/time_checker.hpp"
+
 #include "roq/algo/strategy/dispatcher.hpp"
 #include "roq/algo/strategy/handler.hpp"
 
@@ -132,8 +134,7 @@ struct Simple final : public strategy::Handler {
   std::vector<Source> sources_;
   uint64_t max_order_id_ = {};
   // DEBUG
-  std::chrono::nanoseconds last_receive_time_ = {};
-  std::chrono::nanoseconds last_receive_time_utc_ = {};
+  tools::TimeChecker time_checker_;
 };
 
 }  // namespace arbitrage

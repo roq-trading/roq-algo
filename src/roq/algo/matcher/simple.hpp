@@ -9,6 +9,7 @@
 #include "roq/algo/order_cache.hpp"
 
 #include "roq/algo/tools/market_data.hpp"
+#include "roq/algo/tools/time_checker.hpp"
 
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
@@ -94,8 +95,7 @@ struct Simple final : public Handler {
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;
   // DEBUG
-  std::chrono::nanoseconds last_receive_time_ = {};
-  std::chrono::nanoseconds last_receive_time_utc_ = {};
+  tools::TimeChecker time_checker_;
 };
 
 }  // namespace matcher
