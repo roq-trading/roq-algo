@@ -478,7 +478,6 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
 
 template <typename T>
 void Simple::check(Event<T> const &event) {
-  using value_type = std::remove_cvref<T>::type;
   auto &[message_info, value] = event;
   auto helper = [](auto &lhs, auto rhs) {
     std::chrono::nanoseconds result;
@@ -505,12 +504,8 @@ void Simple::check(Event<T> const &event) {
   assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
   assert(message_info.receive_time.count());
   assert(diff >= 0ns);
-  if constexpr (std::is_same<value_type, Connected>::value) {
-    // XXX FIXME simulator doesn't populate receive_time_utc
-  } else {
-    assert(message_info.receive_time_utc.count());
-    // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
-  }
+  assert(message_info.receive_time_utc.count());
+  // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
 }
 
 }  // namespace arbitrage

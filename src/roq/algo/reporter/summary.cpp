@@ -340,7 +340,6 @@ struct Implementation final : public Handler {
 
   template <typename T>
   void check(Event<T> const &event) {
-    using value_type = std::remove_cvref<T>::type;
     auto &[message_info, value] = event;
     auto helper = [](auto &lhs, auto rhs) {
       std::chrono::nanoseconds result;
@@ -367,19 +366,12 @@ struct Implementation final : public Handler {
     assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);
     assert(message_info.receive_time.count());
     assert(diff >= 0ns);
-    if constexpr (std::is_same<value_type, Connected>::value) {
-      // XXX FIXME simulator doesn't populate receive_time_utc
-    } else {
-      assert(message_info.receive_time_utc.count());
-      // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
-      // ...
-      auto sample_period_utc = (message_info.receive_time_utc / sample_frequency_) * sample_frequency_;
-      // note! the realtime isn't guaranteed to be monotonic and we must therefore protect against time-inversion
-      if (sample_period_utc_ < sample_period_utc) {
-        sample_period_utc_ = sample_period_utc;
-        log::warn("HERE sample_period_utc={}"sv, sample_period_utc_);
-      }
-    }
+    assert(message_info.receive_time_utc.count());
+    // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
+    // ...
+    auto sample_period_utc = (message_info.receive_time_utc / sample_frequency_) * sample_frequency_;
+    if (sample_period_utc_ < sample_period_utc)
+      sample_period_utc_ = sample_period_utc;
   }
 
  private:
