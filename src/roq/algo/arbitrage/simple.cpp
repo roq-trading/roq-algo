@@ -4,9 +4,7 @@
 
 #include "roq/logging.hpp"
 
-#include "roq/utils/common.hpp"
 #include "roq/utils/compare.hpp"
-#include "roq/utils/update.hpp"
 
 using namespace std::literals;
 
@@ -17,8 +15,8 @@ namespace arbitrage {
 // === HELPERS ===
 
 namespace {
-auto to_support_type(MarketDataSource market_data_source) -> SupportType {
-  switch (market_data_source) {
+auto create_market_data_type(auto &config) -> SupportType {
+  switch (config.market_data_source) {
     using enum MarketDataSource;
     case TOP_OF_BOOK:
       return SupportType::TOP_OF_BOOK;
@@ -31,7 +29,7 @@ auto to_support_type(MarketDataSource market_data_source) -> SupportType {
 }
 
 template <typename R>
-auto create_instruments(auto &config, auto market_data_source) {
+auto create_instruments(auto &config) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
   auto size = std::size(config.instruments);
@@ -39,7 +37,7 @@ auto create_instruments(auto &config, auto market_data_source) {
   if (size < 2)
     log::fatal("Unexpected: len(config.instruments)={}"sv, size);
   for (auto &item : config.instruments)
-    result.emplace_back(item, market_data_source);
+    result.emplace_back(item, config.market_data_source);
   return result;
 }
 
@@ -81,10 +79,9 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
-    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{to_support_type(config.market_data_source)},
+    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{create_market_data_type(config)},
       threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
-      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config, config.market_data_source)},
-      sources_{create_sources<decltype(sources_)>(instruments_)} {
+      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }
@@ -114,10 +111,7 @@ void Simple::operator()(Event<Disconnected> const &event) {
   // note! no need to reset stream latencies
   // XXX FIXME TODO what about working orders ???
   // reset instruments
-  auto callback = [](auto &instrument) {
-    instrument.order_state = {};
-    instrument.order_id = {};
-  };
+  auto callback = [&](auto &instrument) { instrument(event); };
   get_instruments_by_source(event, callback);
 }
 
@@ -132,6 +126,7 @@ void Simple::operator()(Event<DownloadEnd> const &event) {
 void Simple::operator()(Event<Ready> const &event) {
   check(event);
   auto &[message_info, ready] = event;
+  log::warn("[{}:{}] ready"sv, message_info.source, message_info.source_name);
   auto &source = sources_[message_info.source];
   source.ready = true;
   for (auto &[name, account] : source.accounts)
@@ -150,7 +145,7 @@ void Simple::operator()(Event<Ready> const &event) {
         dispatcher_.send(cancel_all_orders, message_info.source);
       } catch (NotReady &) {
       }
-      account.has_download_orders = false;  // note! don't wait for ack
+      account.has_download_orders = false;  // note! don't bother waiting for the ack
     }
 }
 
@@ -193,40 +188,36 @@ void Simple::operator()(Event<ReferenceData> const &event) {
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
-  auto &[message_info, market_status] = event;
   auto callback = [&](auto &instrument) {
     instrument(event);
-    update(message_info);
+    update(event);
   };
   get_instrument(event, callback);
 }
 
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
-  auto &[message_info, top_of_book] = event;
   auto callback = [&](auto &instrument) {
     instrument(event);
-    update(message_info);
+    update(event);
   };
   get_instrument(event, callback);
 }
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
-  auto &[message_info, market_by_price_update] = event;
   auto callback = [&](auto &instrument) {
     instrument(event);
-    update(message_info);
+    update(event);
   };
   get_instrument(event, callback);
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
-  auto &[message_info, market_by_order_update] = event;
   auto callback = [&](auto &instrument) {
     instrument(event);
-    update(message_info);
+    update(event);
   };
   get_instrument(event, callback);
 }
@@ -268,8 +259,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
     if (source.ready) {  // live
       if (is_order_complete) {
         assert(instrument.order_state != OrderState::IDLE);
-        instrument.order_state = {};
-        instrument.order_id = {};
+        instrument.reset();
       } else {
         if (instrument.order_state == OrderState::CREATE) {
           instrument.order_state = OrderState::WORKING;
@@ -378,79 +368,68 @@ void Simple::update_latency(std::chrono::nanoseconds &latency, Event<T> const &e
 void Simple::update(MessageInfo const &message_info) {
   for (size_t i = 0; i < std::size(instruments_); ++i) {
     log::debug("instrument[{}]={}"sv, i, instruments_[i]);
-    // XXX FIXME TODO check order state => maybe cancel or timeout
+    // XXX FIXME TODO check order state => maybe cancel or timeout?
   }
   for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
     auto &lhs = instruments_[i];
-    auto lhs_ready = is_ready(message_info, lhs);
-    auto &lhs_top_of_book = lhs.top_of_book();
-    for (size_t j = i + 1; j < std::size(instruments_); ++j) {
-      auto &rhs = instruments_[j];
-      auto rhs_ready = is_ready(message_info, rhs);
-      auto &rhs_top_of_book = rhs.top_of_book();
-      auto spread_1 = lhs_top_of_book.bid_price - rhs_top_of_book.ask_price;  // sell lhs, buy rhs
-      auto spread_2 = rhs_top_of_book.bid_price - lhs_top_of_book.ask_price;  // sell rhs, buy lhs
-      auto trigger_1 = threshold_ < spread_1;
-      auto trigger_2 = threshold_ < spread_2;
-      // log::debug("[{}][{}] {} ({}) {} ({})"sv, i, j, spread_1, trigger_1, spread_2, trigger_2);
-      if (lhs_ready && rhs_ready) {
-        // XXX FIXME TODO something to decide whether to buy or sell (based on positions? or liquidity?)
-        if (trigger_1)
-          maybe_trade(message_info, Side::SELL, lhs, rhs);
-        if (trigger_2)
-          maybe_trade(message_info, Side::BUY, lhs, rhs);
+    if (lhs.is_ready(message_info, max_age_)) {
+      for (size_t j = i + 1; j < std::size(instruments_); ++j) {
+        auto &rhs = instruments_[j];
+        if (rhs.is_ready(message_info, max_age_))
+          check_spread(message_info, lhs, rhs);
       }
     }
   }
 }
 
-bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrument) const {
-  if (instrument.order_state != OrderState::IDLE)
-    return false;
-  assert(instrument.order_id == 0);
-  // XXX FIXME TODO check rate-limit throttling
-  auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
-  auto &top_of_book = instrument.top_of_book();
-  return instrument.is_market_active(message_info, max_age_) && has_liquidity(top_of_book.bid_price, top_of_book.bid_quantity) &&
-         has_liquidity(top_of_book.ask_price, top_of_book.ask_quantity);
+void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Instrument &rhs) {
+  auto [bid_0, ask_0] = lhs.get_best();
+  auto [bid_1, ask_1] = rhs.get_best();
+  auto spread_0 = bid_0 - ask_1;  // sell lhs, buy rhs
+  auto spread_1 = bid_1 - ask_0;  // sell rhs, buy lhs
+  auto trigger_0 = threshold_ < spread_0;
+  auto trigger_1 = threshold_ < spread_1;
+  log::debug(
+      "SPREAD [{}:{}:{}][{}:{}:{}] {} ({}) {} ({})"sv,
+      lhs.source,
+      lhs.exchange,
+      lhs.symbol,
+      rhs.source,
+      rhs.exchange,
+      rhs.symbol,
+      spread_0,
+      trigger_0,
+      spread_1,
+      trigger_1);
+  // XXX FIXME TODO something to decide whether to buy or sell (based on positions? or liquidity?)
+  if (trigger_0)
+    maybe_trade_spread(message_info, Side::SELL, lhs, rhs);
+  if (trigger_1)
+    maybe_trade_spread(message_info, Side::BUY, lhs, rhs);
 }
 
-bool Simple::can_trade(Side side, Instrument &instrument) {
-  switch (side) {
-    using enum Side;
-    case UNDEFINED:
-      assert(false);
-      break;
-    case BUY:
-      return utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument
-    case SELL:
-      return utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument
-  }
-  return false;
-}
-
-// XXX FIXME TODO support TimeInForce::IOC
-void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instrument &rhs) {
+void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs, Instrument &rhs) {
   auto helper = [this](auto side, auto &instrument) -> bool {
     assert(instrument.order_state == OrderState::IDLE);
     assert(instrument.order_id == 0);
     instrument.order_state = OrderState::CREATE;
     instrument.order_id = ++max_order_id_;
-    auto price = utils::price_from_side(instrument.top_of_book(), utils::invert(side));  // aggress other side
+    auto quantity = 1.0;                                                                 // XXX TODO compute quantity
+    auto price = utils::price_from_side(instrument.top_of_book(), utils::invert(side));  // note! aggress liquidity on other side
     auto create_order = CreateOrder{
         .account = instrument.account,
         .order_id = instrument.order_id,
         .exchange = instrument.exchange,
         .symbol = instrument.symbol,
         .side = side,
-        .position_effect = {},  // XXX TODO instrument config
-        .margin_mode = {},      // XXX TODO instrument config
+        .position_effect = position_effect_,
+        .margin_mode = margin_mode_,
         .max_show_quantity = NaN,
         .order_type = OrderType::LIMIT,
-        .time_in_force = TimeInForce::GTC,
+        .time_in_force = time_in_force_,
         .execution_instructions = {},
         .request_template = {},
-        .quantity = 1.0,  // XXX TODO
+        .quantity = quantity,
         .price = price,
         .stop_price = NaN,
         .routing_id = {},
@@ -461,8 +440,7 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
       dispatcher_.send(create_order, instrument.source);
       // XXX FIXME TODO record timestamp so we can rate-limit
     } catch (NotReady &) {
-      instrument.order_state = OrderState::IDLE;
-      instrument.order_id = {};
+      instrument.reset();
       return false;
     }
     return true;
@@ -474,6 +452,20 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
       // XXX FIXME TODO cancel first leg
     }
   }
+}
+
+bool Simple::can_trade(Side side, Instrument &instrument) {
+  switch (side) {
+    using enum Side;
+    case UNDEFINED:
+      assert(false);
+      break;
+    case BUY:
+      return utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument_0
+    case SELL:
+      return utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument_0
+  }
+  return false;
 }
 
 template <typename T>

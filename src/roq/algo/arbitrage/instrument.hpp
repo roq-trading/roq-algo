@@ -7,6 +7,7 @@
 #include <magic_enum.hpp>
 
 #include <string>
+#include <utility>
 
 #include "roq/api.hpp"
 
@@ -29,11 +30,18 @@ enum class OrderState {
 struct Instrument final {
   Instrument(algo::Instrument const &, MarketDataSource);
 
-  bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
-    return market_data_.is_market_active(message_info, max_age);
+  Layer const &top_of_book() const { return market_data_.top_of_book(); }
+
+  std::pair<double, double> get_best() const {
+    auto &top_of_book = market_data_.top_of_book();
+    return {top_of_book.bid_price, top_of_book.ask_price};
   }
 
-  Layer const &top_of_book() const { return market_data_.top_of_book(); }
+  bool is_ready(MessageInfo const &, std::chrono::nanoseconds max_age) const;
+
+  void reset();
+
+  void operator()(Event<Disconnected> const &) { reset(); }
 
   void operator()(Event<ReferenceData> const &event) { market_data_(event); }
   void operator()(Event<MarketStatus> const &event) { market_data_(event); }
@@ -67,12 +75,20 @@ struct Instrument final {
         market_data_);
   }
 
+ protected:
+  bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
+    return market_data_.is_market_active(message_info, max_age);
+  }
+
+ public:
   uint8_t const source = {};
   std::string const exchange;
   std::string const symbol;
   std::string const account;
+
   OrderState order_state = {};
   uint64_t order_id = {};
+
   double position = 0.0;
 
  private:

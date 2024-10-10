@@ -86,11 +86,11 @@ struct Simple final : public strategy::Handler {
 
   void update(MessageInfo const &);
 
-  bool is_ready(MessageInfo const &, Instrument const &) const;
+  void check_spread(MessageInfo const &, Instrument &lhs, Instrument &rhs);
+
+  void maybe_trade_spread(MessageInfo const &, Side, Instrument &lhs, Instrument &rhs);
 
   bool can_trade(Side, Instrument &);
-
-  void maybe_trade(MessageInfo const &, Side, Instrument &lhs, Instrument &rhs);
 
   struct Order final {
     Side side = {};
@@ -119,17 +119,17 @@ struct Simple final : public strategy::Handler {
 
  private:
   Dispatcher &dispatcher_;
-  // config
   uint32_t const strategy_id_;
-  std::chrono::nanoseconds const max_age_;  // used when trading status is unavailable
+  std::chrono::nanoseconds const max_age_;  // note! only used when trading status is unavailable
   SupportType const market_data_type_;
-  double const threshold_;
+  double const threshold_;                              // note! abs(spread) must exceed this threshold
+  PositionEffect const position_effect_ = {};           // XXX TODO from config
+  MarginMode const margin_mode_ = {};                   // XXX TODO from config
+  TimeInForce const time_in_force_ = TimeInForce::GTC;  // XXX TODO from config
   double const quantity_0_;
   double const min_position_0_;
   double const max_position_0_;
-  // cache
   OrderCache &order_cache_;
-  // state
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;
   uint64_t max_order_id_ = {};
