@@ -16,9 +16,7 @@ namespace matcher {
 // === HELPERS ===
 
 namespace {
-// note! first is price which is used for the primary ordering, second is order_id which gives us priority
-
-auto compare_buy = [](auto &lhs, auto &rhs) {
+auto compare_buy_orders = [](auto &lhs, auto &rhs) {
   if (lhs.first > rhs.first)
     return true;
   if (lhs.first == rhs.first)
@@ -26,7 +24,7 @@ auto compare_buy = [](auto &lhs, auto &rhs) {
   return false;
 };
 
-auto compare_sell = [](auto &lhs, auto &rhs) {
+auto compare_sell_orders = [](auto &lhs, auto &rhs) {
   if (lhs.first < rhs.first)
     return true;
   if (lhs.first == rhs.first)
@@ -78,7 +76,7 @@ Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_c
       market_data_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
 }
 
-// note! the following handlers **must** dispatch market data and potentially overlay with own orders / fills
+// note! the following handlers **must** dispatch market data and **may** potentially overlay own orders and fills
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   check(event);
@@ -369,10 +367,10 @@ void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
       assert(false);
       log::fatal("Unexpected"sv);
     case BUY:
-      add_order_helper(buy_orders_, compare_buy, order_id, price);
+      add_order_helper(buy_orders_, compare_buy_orders, order_id, price);
       break;
     case SELL:
-      add_order_helper(sell_orders_, compare_sell, order_id, price);
+      add_order_helper(sell_orders_, compare_sell_orders, order_id, price);
       break;
   }
 }
@@ -384,9 +382,9 @@ bool Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
       assert(false);
       break;
     case BUY:
-      return remove_order_helper(buy_orders_, compare_buy, order_id, price);
+      return remove_order_helper(buy_orders_, compare_buy_orders, order_id, price);
     case SELL:
-      return remove_order_helper(sell_orders_, compare_sell, order_id, price);
+      return remove_order_helper(sell_orders_, compare_sell_orders, order_id, price);
   }
   log::fatal("Unexpected"sv);
 }
