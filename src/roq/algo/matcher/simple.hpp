@@ -8,7 +8,7 @@
 #include "roq/algo/market_data_source.hpp"
 #include "roq/algo/order_cache.hpp"
 
-#include "roq/algo/tools/market.hpp"
+#include "roq/algo/tools/market_data.hpp"
 
 #include "roq/algo/matcher/config.hpp"
 #include "roq/algo/matcher/dispatcher.hpp"
@@ -66,9 +66,6 @@ struct Simple final : public Handler {
 
   // utils
 
-  template <typename T>
-  void update_exchange_time_utc(Event<T> const &);
-
   bool is_aggressive(Side, int64_t price) const;
 
   void add_order(uint64_t order_id, Side, int64_t price);
@@ -83,12 +80,9 @@ struct Simple final : public Handler {
 
  private:
   Dispatcher &dispatcher_;
-  // config
   MarketDataSource const market_data_source_;
-  // cache
   OrderCache &order_cache_;
-  // market
-  tools::Market market_;
+  tools::MarketData market_data_;
   struct {
     std::pair<int64_t, int64_t> units = {
         std::numeric_limits<int64_t>::min(),
@@ -96,7 +90,6 @@ struct Simple final : public Handler {
     };
     std::pair<double, double> external = {NaN, NaN};
   } best_;
-  std::chrono::nanoseconds exchange_time_utc_ = {};
   // orders
   std::vector<std::pair<int64_t, uint64_t>> buy_;
   std::vector<std::pair<int64_t, uint64_t>> sell_;

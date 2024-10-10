@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "roq/compat.hpp"
-
 #include <fmt/format.h>
 
 #include <chrono>
@@ -22,11 +20,11 @@ namespace roq {
 namespace algo {
 namespace tools {
 
-struct ROQ_PUBLIC Market final {
-  Market(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource);
+struct MarketData final {
+  MarketData(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource);
 
-  Market(Market &&) = default;
-  Market(Market const &) = delete;
+  MarketData(MarketData &&) = default;
+  MarketData(MarketData const &) = delete;
 
   bool has_tick_size() const { return !std::isnan(tick_size_) && precision_ != Precision{}; }
 
@@ -34,14 +32,21 @@ struct ROQ_PUBLIC Market final {
 
   std::pair<int64_t, bool> price_to_ticks(double price) const;
 
-  Layer const &get_best() const { return best_; }
+  // note! depends on MarketDataSource
+  Layer const &top_of_book() const { return best_; }
+
+  std::chrono::nanoseconds exchange_time_utc() const { return exchange_time_utc_; }
 
   void operator()(Event<ReferenceData> const &);
   void operator()(Event<MarketStatus> const &);
 
+  // note! depends on MarketDataSource
   bool operator()(Event<TopOfBook> const &);
   bool operator()(Event<MarketByPriceUpdate> const &);
   bool operator()(Event<MarketByOrderUpdate> const &);
+
+  void operator()(Event<TradeSummary> const &);
+  void operator()(Event<StatisticsUpdate> const &);
 
   template <typename OutputIt>
   auto constexpr format_helper(OutputIt out) const {
@@ -86,7 +91,7 @@ struct ROQ_PUBLIC Market final {
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::tools::Market> {
+struct fmt::formatter<roq::algo::tools::MarketData> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::tools::Market const &value, format_context &context) const { return value.format_helper(context.out()); }
+  auto format(roq::algo::tools::MarketData const &value, format_context &context) const { return value.format_helper(context.out()); }
 };

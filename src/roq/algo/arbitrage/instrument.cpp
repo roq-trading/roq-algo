@@ -11,7 +11,7 @@ namespace arbitrage {
 // === IMPLEMENTATION ===
 
 Instrument::Instrument(algo::Instrument const &item, MarketDataSource market_data_source)
-    : source{item.source}, exchange{item.exchange}, symbol{item.symbol}, account{item.account}, market_{exchange, symbol, market_data_source} {
+    : source{item.source}, exchange{item.exchange}, symbol{item.symbol}, account{item.account}, market_data_{exchange, symbol, market_data_source} {
 }
 
 }  // namespace arbitrage

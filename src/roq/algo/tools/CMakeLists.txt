@@ -1,6 +1,6 @@
 set(TARGET_NAME ${PROJECT_NAME}-tools)
 
-set(SOURCES market.cpp)
+set(SOURCES market_data.cpp)
 
 add_library(${TARGET_NAME} OBJECT ${SOURCES})
 

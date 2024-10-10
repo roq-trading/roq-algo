@@ -383,13 +383,13 @@ void Simple::update(MessageInfo const &message_info) {
   for (size_t i = 0; i < (std::size(instruments_) - 1); ++i) {
     auto &lhs = instruments_[i];
     auto lhs_ready = is_ready(message_info, lhs);
-    auto &lhs_best = lhs.get_best();
+    auto &lhs_top_of_book = lhs.top_of_book();
     for (size_t j = i + 1; j < std::size(instruments_); ++j) {
       auto &rhs = instruments_[j];
       auto rhs_ready = is_ready(message_info, rhs);
-      auto &rhs_best = rhs.get_best();
-      auto spread_1 = lhs_best.bid_price - rhs_best.ask_price;  // sell lhs, buy rhs
-      auto spread_2 = rhs_best.bid_price - lhs_best.ask_price;  // sell rhs, buy lhs
+      auto &rhs_top_of_book = rhs.top_of_book();
+      auto spread_1 = lhs_top_of_book.bid_price - rhs_top_of_book.ask_price;  // sell lhs, buy rhs
+      auto spread_2 = rhs_top_of_book.bid_price - lhs_top_of_book.ask_price;  // sell rhs, buy lhs
       auto trigger_1 = threshold_ < spread_1;
       auto trigger_2 = threshold_ < spread_2;
       // log::debug("[{}][{}] {} ({}) {} ({})"sv, i, j, spread_1, trigger_1, spread_2, trigger_2);
@@ -410,9 +410,9 @@ bool Simple::is_ready(MessageInfo const &message_info, Instrument const &instrum
   assert(instrument.order_id == 0);
   // XXX FIXME TODO check rate-limit throttling
   auto has_liquidity = [](auto price, auto quantity) { return !std::isnan(price) && !std::isnan(quantity) && quantity > 0.0; };
-  auto &best = instrument.get_best();
-  return instrument.is_market_active(message_info, max_age_) && has_liquidity(best.bid_price, best.bid_quantity) &&
-         has_liquidity(best.ask_price, best.ask_quantity);
+  auto &top_of_book = instrument.top_of_book();
+  return instrument.is_market_active(message_info, max_age_) && has_liquidity(top_of_book.bid_price, top_of_book.bid_quantity) &&
+         has_liquidity(top_of_book.ask_price, top_of_book.ask_quantity);
 }
 
 bool Simple::can_trade(Side side, Instrument &instrument) {
@@ -436,7 +436,7 @@ void Simple::maybe_trade(MessageInfo const &, Side side, Instrument &lhs, Instru
     assert(instrument.order_id == 0);
     instrument.order_state = OrderState::CREATE;
     instrument.order_id = ++max_order_id_;
-    auto price = utils::price_from_side(instrument.get_best(), utils::invert(side));  // aggress other side
+    auto price = utils::price_from_side(instrument.top_of_book(), utils::invert(side));  // aggress other side
     auto create_order = CreateOrder{
         .account = instrument.account,
         .order_id = instrument.order_id,

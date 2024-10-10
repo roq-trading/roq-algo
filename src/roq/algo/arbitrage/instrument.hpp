@@ -13,7 +13,7 @@
 #include "roq/algo/instrument.hpp"
 #include "roq/algo/market_data_source.hpp"
 
-#include "roq/algo/tools/market.hpp"
+#include "roq/algo/tools/market_data.hpp"
 
 namespace roq {
 namespace algo {
@@ -29,16 +29,18 @@ enum class OrderState {
 struct Instrument final {
   Instrument(algo::Instrument const &, MarketDataSource);
 
-  bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const { return market_.is_market_active(message_info, max_age); }
+  bool is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
+    return market_data_.is_market_active(message_info, max_age);
+  }
 
-  Layer const &get_best() const { return market_.get_best(); }
+  Layer const &top_of_book() const { return market_data_.top_of_book(); }
 
-  void operator()(Event<ReferenceData> const &event) { market_(event); }
-  void operator()(Event<MarketStatus> const &event) { market_(event); }
+  void operator()(Event<ReferenceData> const &event) { market_data_(event); }
+  void operator()(Event<MarketStatus> const &event) { market_data_(event); }
 
-  void operator()(Event<TopOfBook> const &event) { market_(event); }
-  void operator()(Event<MarketByPriceUpdate> const &event) { market_(event); }
-  void operator()(Event<MarketByOrderUpdate> const &event) { market_(event); }
+  void operator()(Event<TopOfBook> const &event) { market_data_(event); }
+  void operator()(Event<MarketByPriceUpdate> const &event) { market_data_(event); }
+  void operator()(Event<MarketByOrderUpdate> const &event) { market_data_(event); }
 
   template <typename OutputIt>
   auto constexpr format_helper(OutputIt out) const {
@@ -53,7 +55,7 @@ struct Instrument final {
         R"(order_state={}, )"
         R"(order_id={}, )"
         R"(position={}, )"
-        R"(market={})"
+        R"(market_data={})"
         R"(}})"sv,
         source,
         exchange,
@@ -62,7 +64,7 @@ struct Instrument final {
         magic_enum::enum_name(order_state),
         order_id,
         position,
-        market_);
+        market_data_);
   }
 
   uint8_t const source = {};
@@ -74,7 +76,7 @@ struct Instrument final {
   double position = 0.0;
 
  private:
-  tools::Market market_;
+  tools::MarketData market_data_;
 };
 
 }  // namespace arbitrage

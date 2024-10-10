@@ -13,7 +13,7 @@
 
 #include "roq/utils/container.hpp"
 
-#include "roq/algo/tools/market.hpp"
+#include "roq/algo/tools/market_data.hpp"
 
 using namespace std::literals;
 
@@ -46,9 +46,9 @@ struct Implementation final : public Handler {
  protected:
   struct Instrument final {
     Instrument(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
-        : market{exchange, symbol, market_data_source} {}
+        : market_data{exchange, symbol, market_data_source} {}
 
-    tools::Market market;
+    tools::MarketData market_data;
 
     // market data
     struct ReferenceData final {
@@ -173,7 +173,7 @@ struct Implementation final : public Handler {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.reference_data.total_count;
-      instrument.market(event);
+      instrument.market_data(event);
     };
     get_instrument(event, callback);
   }
@@ -182,7 +182,7 @@ struct Implementation final : public Handler {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.market_status.total_count;
-      instrument.market(event);
+      instrument.market_data(event);
     };
     get_instrument(event, callback);
   }
@@ -191,7 +191,7 @@ struct Implementation final : public Handler {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.top_of_book.total_count;
-      if (instrument.market(event))
+      if (instrument.market_data(event))
         update_best(instrument);
     };
     get_instrument(event, callback);
@@ -201,7 +201,7 @@ struct Implementation final : public Handler {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_price_update.total_count;
-      if (instrument.market(event))
+      if (instrument.market_data(event))
         update_best(instrument);
     };
     get_instrument(event, callback);
@@ -211,7 +211,7 @@ struct Implementation final : public Handler {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_order_update.total_count;
-      if (instrument.market(event))
+      if (instrument.market_data(event))
         update_best(instrument);
     };
     get_instrument(event, callback);
@@ -219,13 +219,19 @@ struct Implementation final : public Handler {
 
   void operator()(Event<TradeSummary> const &event) override {
     check(event);
-    auto callback = [&](auto &instrument) { ++instrument.trade_summary.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.trade_summary.total_count;
+      instrument.market_data(event);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<StatisticsUpdate> const &event) override {
     check(event);
-    auto callback = [&](auto &instrument) { ++instrument.statistics_update.total_count; };
+    auto callback = [&](auto &instrument) {
+      ++instrument.statistics_update.total_count;
+      instrument.market_data(event);
+    };
     get_instrument(event, callback);
   }
 
@@ -321,8 +327,8 @@ struct Implementation final : public Handler {
   }
 
   void update_best(Instrument &instrument) {
-    auto &best = instrument.market.get_best();
-    auto mid_price = 0.5 * (best.bid_price + best.ask_price);  // XXX FIXME TODO deal with one-sided and missing
+    auto &top_of_book = instrument.market_data.top_of_book();
+    auto mid_price = 0.5 * (top_of_book.bid_price + top_of_book.ask_price);  // XXX FIXME TODO deal with one-sided and missing
     assert(sample_period_utc_.count());
     if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
       auto history = Instrument::History{

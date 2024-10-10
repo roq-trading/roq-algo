@@ -1,6 +1,6 @@
 /* Copyright (c) 2017-2024, Hans Erik Thrane */
 
-#include "roq/algo/tools/market.hpp"
+#include "roq/algo/tools/market_data.hpp"
 
 #include <cassert>
 
@@ -40,24 +40,24 @@ void update_exchange_time_utc(auto &result, Event<T> const &event) {
 
 // === IMPLEMENTATION ===
 
-Market::Market(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
+MarketData::MarketData(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
     : market_data_source_{market_data_source}, market_by_price_{create_market_by_price(exchange, symbol)},
       market_by_order_{create_market_by_order(exchange, symbol)} {
 }
 
-bool Market::is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
+bool MarketData::is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
   if (market_status_.trading_status != TradingStatus{})
     return market_status_.trading_status == TradingStatus::OPEN;
   // use age of market data update as fallback if exchange doesn't support trading status
   return (message_info.receive_time_utc - exchange_time_utc_) < max_age;
 }
 
-std::pair<int64_t, bool> Market::price_to_ticks(double price) const {
+std::pair<int64_t, bool> MarketData::price_to_ticks(double price) const {
   assert(has_tick_size());
   return market::price_to_ticks(price, tick_size_, precision_);
 }
 
-void Market::operator()(Event<ReferenceData> const &event) {
+void MarketData::operator()(Event<ReferenceData> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   auto &[message_info, reference_data] = event;
   top_of_book_(event);
@@ -74,13 +74,13 @@ void Market::operator()(Event<ReferenceData> const &event) {
   roq::utils::update(min_trade_vol_, reference_data.min_trade_vol);
 }
 
-void Market::operator()(Event<MarketStatus> const &event) {
+void MarketData::operator()(Event<MarketStatus> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   if (!market_status_(event))
     return;
 }
 
-bool Market::operator()(Event<TopOfBook> const &event) {
+bool MarketData::operator()(Event<TopOfBook> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   if (!top_of_book_(event))
     return false;
@@ -90,7 +90,7 @@ bool Market::operator()(Event<TopOfBook> const &event) {
   return true;
 }
 
-bool Market::operator()(Event<MarketByPriceUpdate> const &event) {
+bool MarketData::operator()(Event<MarketByPriceUpdate> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   (*market_by_price_)(event);
   if (market_data_source_ != MarketDataSource::MARKET_BY_PRICE)
@@ -99,13 +99,21 @@ bool Market::operator()(Event<MarketByPriceUpdate> const &event) {
   return true;
 }
 
-bool Market::operator()(Event<MarketByOrderUpdate> const &event) {
+bool MarketData::operator()(Event<MarketByOrderUpdate> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   (*market_by_order_)(event);
   if (market_data_source_ != MarketDataSource::MARKET_BY_ORDER)
     return false;
   (*market_by_order_).extract_2({&best_, 1});
   return true;
+}
+
+void MarketData::operator()(Event<TradeSummary> const &event) {
+  update_exchange_time_utc(exchange_time_utc_, event);
+}
+
+void MarketData::operator()(Event<StatisticsUpdate> const &event) {
+  update_exchange_time_utc(exchange_time_utc_, event);
 }
 
 }  // namespace tools

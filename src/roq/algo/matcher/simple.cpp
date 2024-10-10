@@ -56,11 +56,11 @@ auto remove_order_helper(auto &container, auto compare, auto order_id, auto pric
 }
 
 template <typename Callback>
-void try_match_helper(auto &container, auto compare, auto best, auto &cache, Callback callback) {
+void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cache, Callback callback) {
   auto iter = std::begin(container);
   for (; iter != std::end(container); ++iter) {
     auto &[price, order_id] = *iter;
-    if (!compare(price, best))
+    if (!compare(price, top_of_book))
       break;
     if (cache.get_order(order_id, [&](auto &order) { callback(order); })) {
     } else {
@@ -75,57 +75,52 @@ void try_match_helper(auto &container, auto compare, auto best, auto &cache, Cal
 
 Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
     : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, order_cache_{order_cache},
-      market_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
+      market_data_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
 }
 
 void Simple::operator()(Event<ReferenceData> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data
-  market_(event);
+  market_data_(event);
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
   dispatcher_(event);  // note! dispatch market data
-  update_exchange_time_utc(event);
-  market_(event);
+  market_data_(event);
 }
 
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
-  if (market_(event))
+  if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
-  if (market_(event))
+  if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
-  if (market_(event))
+  if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
+  market_data_(event);
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
   check(event);
-  update_exchange_time_utc(event);
   dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
+  market_data_(event);
 }
 
 void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
@@ -147,7 +142,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
     dispatch_order_ack(event, order, error);
   } else {
     dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-    auto [price, overflow] = market_.price_to_ticks(create_order.price);
+    auto [price, overflow] = market_data_.price_to_ticks(create_order.price);
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
     if (is_aggressive(create_order.side, price)) {
@@ -165,7 +160,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
       }();
       auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
       auto fill = Fill{
-          .exchange_time_utc = exchange_time_utc_,
+          .exchange_time_utc = market_data_.exchange_time_utc(),
           .external_trade_id = external_trade_id,
           .quantity = create_order.quantity,
           .price = matched_price,
@@ -208,7 +203,7 @@ void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   if (utils::is_order_complete(order.order_status)) {
     dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
   } else {
-    auto [price, overflow] = market_.price_to_ticks(order.price);
+    auto [price, overflow] = market_data_.price_to_ticks(order.price);
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
     if (remove_order(order.order_id, order.side, price)) {
@@ -231,7 +226,7 @@ void Simple::operator()(Event<CancelAllOrders> const &event) {
 void Simple::match_resting_orders(MessageInfo const &message_info) {
   auto convert = [this](auto price, auto default_value) {
     if (!std::isnan(price)) {
-      auto [units, overflow] = market_.price_to_ticks(price);
+      auto [units, overflow] = market_data_.price_to_ticks(price);
       if (!overflow)
         return units;
     }
@@ -241,7 +236,7 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
     assert(utils::compare(order.remaining_quantity, 0.0) > 0);
     auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
     auto fill = Fill{
-        .exchange_time_utc = exchange_time_utc_,
+        .exchange_time_utc = market_data_.exchange_time_utc(),
         .external_trade_id = external_trade_id,
         .quantity = order.remaining_quantity,
         .price = order.price,
@@ -260,15 +255,15 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
     dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
     dispatch_trade_update(message_info, order, fill);
   };
-  auto &best = market_.get_best();
-  auto bid = convert(best.bid_price, std::numeric_limits<int64_t>::min());
+  auto &top_of_book = market_data_.top_of_book();
+  auto bid = convert(top_of_book.bid_price, std::numeric_limits<int64_t>::min());
   if (utils::update(best_.units.first, bid)) {
-    best_.external.first = best.bid_price;
+    best_.external.first = top_of_book.bid_price;
     try_match(Side::BUY, matched_order);
   }
-  auto ask = convert(best.ask_price, std::numeric_limits<int64_t>::max());
+  auto ask = convert(top_of_book.ask_price, std::numeric_limits<int64_t>::max());
   if (utils::update(best_.units.second, ask)) {
-    best_.external.second = best.ask_price;
+    best_.external.second = top_of_book.ask_price;
     try_match(Side::SELL, matched_order);
   }
 }
@@ -350,12 +345,6 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order
 }
 
 // utils
-
-template <typename T>
-void Simple::update_exchange_time_utc(Event<T> const &event) {
-  // note! we use max because market data could arrive out of sequence (different sources, streams, etc.)
-  utils::update_max(exchange_time_utc_, event.value.exchange_time_utc);
-}
 
 bool Simple::is_aggressive(Side side, int64_t price) const {
   switch (side) {
