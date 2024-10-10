@@ -15,6 +15,7 @@
 #include "roq/algo/market_data_source.hpp"
 
 #include "roq/algo/tools/market_data.hpp"
+#include "roq/algo/tools/position_tracker.hpp"
 
 namespace roq {
 namespace algo {
@@ -30,6 +31,8 @@ enum class OrderState {
 struct Instrument final {
   Instrument(algo::Instrument const &, MarketDataSource);
 
+  // market data
+
   Layer const &top_of_book() const { return market_data_.top_of_book(); }
 
   std::pair<double, double> get_best() const {
@@ -39,7 +42,13 @@ struct Instrument final {
 
   bool is_ready(MessageInfo const &, std::chrono::nanoseconds max_age) const;
 
+  // order management
+
   void reset();
+
+  double current_position() const { return position_tracker_.current_position(); }
+
+  // events
 
   void operator()(Event<Disconnected> const &) { reset(); }
 
@@ -49,6 +58,9 @@ struct Instrument final {
   void operator()(Event<TopOfBook> const &event) { market_data_(event); }
   void operator()(Event<MarketByPriceUpdate> const &event) { market_data_(event); }
   void operator()(Event<MarketByOrderUpdate> const &event) { market_data_(event); }
+
+  void operator()(Event<TradeUpdate> const &event) { position_tracker_(event); }
+  void operator()(Event<PositionUpdate> const &event) { position_tracker_(event); }
 
   template <typename OutputIt>
   auto constexpr format_helper(OutputIt out) const {
@@ -60,19 +72,19 @@ struct Instrument final {
         R"(exchange="{}", )"
         R"(symbol="{}", )"
         R"(account="{}", )"
+        R"(market_data={}, )"
+        R"(position_tracker={}, )"
         R"(order_state={}, )"
-        R"(order_id={}, )"
-        R"(position={}, )"
-        R"(market_data={})"
+        R"(order_id={})"
         R"(}})"sv,
         source,
         exchange,
         symbol,
         account,
+        market_data_,
+        position_tracker_,
         magic_enum::enum_name(order_state),
-        order_id,
-        position,
-        market_data_);
+        order_id);
   }
 
  protected:
@@ -86,13 +98,13 @@ struct Instrument final {
   std::string const symbol;
   std::string const account;
 
-  OrderState order_state = {};
-  uint64_t order_id = {};
-
-  double position = 0.0;
-
  private:
   tools::MarketData market_data_;
+  tools::PositionTracker position_tracker_;
+
+ public:
+  OrderState order_state = {};
+  uint64_t order_id = {};
 };
 
 }  // namespace arbitrage

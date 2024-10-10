@@ -176,7 +176,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
       order.last_traded_quantity = fill.quantity;
       order.last_traded_price = fill.price;
       order.last_liquidity = fill.liquidity;
-      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
+      dispatch_order_update(message_info, order);
       dispatch_trade_update(message_info, order, fill);
     } else {
       add_order(order.order_id, order.side, price);
@@ -187,7 +187,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
       order.last_traded_quantity = NaN;
       order.last_traded_price = NaN;
       order.last_liquidity = {};
-      dispatch_order_update(message_info, order, UpdateType::SNAPSHOT);
+      dispatch_order_update(message_info, order);
     }
   }
 }
@@ -212,7 +212,7 @@ void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
     } else {
       dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
     }
-    dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
+    dispatch_order_update(message_info, order);
   }
 }
 
@@ -252,7 +252,7 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
     order.last_traded_quantity = fill.quantity;
     order.last_traded_price = fill.price;
     order.last_liquidity = fill.liquidity;
-    dispatch_order_update(message_info, order, UpdateType::INCREMENTAL);
+    dispatch_order_update(message_info, order);
     dispatch_trade_update(message_info, order, fill);
   };
   auto &top_of_book = market_data_.top_of_book();
@@ -316,9 +316,9 @@ void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order
   create_event_and_dispatch(dispatcher_, message_info, order_ack);
 }
 
-void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order const &order, UpdateType update_type) {
+void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order const &order) {
   auto order_update = static_cast<OrderUpdate>(order);
-  order_update.update_type = update_type;
+  order_update.update_type = UpdateType::INCREMENTAL;
   create_event_and_dispatch(dispatcher_, message_info, order_update);
 }
 
@@ -338,7 +338,7 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order
       .client_order_id = {},
       .fills = {&fill, 1},
       .routing_id = {},
-      .update_type = UpdateType::SNAPSHOT,
+      .update_type = UpdateType::INCREMENTAL,
       .user = {},
   };
   create_event_and_dispatch(dispatcher_, message_info, trade_update);

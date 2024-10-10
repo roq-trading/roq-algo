@@ -1,6 +1,6 @@
 set(TARGET_NAME ${PROJECT_NAME}-tools)
 
-set(SOURCES market_data.cpp time_checker.cpp)
+set(SOURCES market_data.cpp position_tracker.cpp time_checker.cpp)
 
 add_library(${TARGET_NAME} OBJECT ${SOURCES})
 

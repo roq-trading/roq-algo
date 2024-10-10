@@ -250,51 +250,75 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
 
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   check(event);
-  auto &[message_info, order_update] = event;
-  if (strategy_id_ && strategy_id_ != order_update.strategy_id)
-    return;
-  auto &source = sources_[message_info.source];
-  auto is_order_complete = utils::is_order_complete(order_update.order_status);
-  auto callback = [&](auto &account, auto &instrument) {
-    if (source.ready) {  // live
-      if (is_order_complete) {
-        assert(instrument.order_state != OrderState::IDLE);
-        instrument.reset();
-      } else {
-        if (instrument.order_state == OrderState::CREATE) {
-          instrument.order_state = OrderState::WORKING;
-          assert(instrument.order_id);
-        } else {
-          // XXX FIXME cancel ???
+  if (is_my_order(event)) {
+    auto &[message_info, order_update] = event;
+    auto &source = sources_[message_info.source];
+    auto is_order_complete = utils::is_order_complete(order_update.order_status);
+    auto callback = [&](auto &account, auto &instrument) {
+      switch (order_update.update_type) {
+        using enum UpdateType;
+        case UNDEFINED:
+          assert(false);
+          break;
+        case SNAPSHOT:
+          if (source.ready) {
+            // note! gateway has reconnected to the exchange and we are now receiving the downloaded state of managed orders
+            // XXX FIXME TODO not sure what...
+          } else {
+            // note! we have (re)connected to gateway and managed orders are now being downloaded
+            if (!is_order_complete) {
+              // note! we cancel all downloaded orders when we (re)connect to the gateway (see ready event)
+              account.has_download_orders = true;  // XXX FIXME TODO manage by instrument?
+            }
+          }
+          break;
+        case INCREMENTAL: {
+          // note! gateway has received an order update directly from the exchange
+          assert(source.ready);
+          if (is_order_complete) {
+            assert(instrument.order_state != OrderState::IDLE);
+            instrument.reset();
+          } else {
+            switch (instrument.order_state) {
+              using enum OrderState;
+              case IDLE:
+                assert(false);
+                break;
+              case CREATE:
+                instrument.order_state = OrderState::WORKING;
+                assert(instrument.order_id);
+                break;
+              case WORKING:
+                assert(instrument.order_id);
+                break;
+              case CANCEL:
+                // note! not a hard fault because there is a race + the cancel request could be rejected (or even lost)
+                // XXX FIXME TODO maybe retry ???
+                assert(instrument.order_id);
+            }
+          }
+          break;
         }
+        case STALE:
+          // note! gateway hs lost connection to exchange and we get notified ==> wait for gateway to reconnect and send snapshot
+          break;
       }
-    } else {  // download
-      if (!is_order_complete) {
-        account.has_download_orders = true;  // XXX FIXME TODO by instrument?
-      }
-    }
-  };
-  get_account_and_instrument(event, callback);
+    };
+    get_account_and_instrument(event, callback);
+  }
 }
 
 void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
   check(event);
-  auto &[message_info, trade_update] = event;
-  if (strategy_id_ && strategy_id_ != trade_update.strategy_id)
-    return;
-  auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {
-    // XXX FIXME TODO own position tracking (sum of fills)
-  };
-  get_account_and_instrument(event, callback);
+  if (is_my_order(event)) {
+    auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) { instrument(event); };
+    get_account_and_instrument(event, callback);
+  }
 }
 
-// XXX FIXME TODO simulator doesn't emit snapshot ???
 void Simple::operator()(Event<PositionUpdate> const &event) {
   check(event);
-  auto &[message_info, position_update] = event;
-  auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) {
-    instrument.position = position_update.long_quantity - position_update.short_quantity;
-  };
+  auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) { instrument(event); };
   get_account_and_instrument(event, callback);
 }
 
@@ -454,18 +478,25 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
   }
 }
 
-bool Simple::can_trade(Side side, Instrument &instrument) {
+bool Simple::can_trade(Side side, Instrument &instrument) const {
+  auto position = instrument.current_position();
   switch (side) {
     using enum Side;
     case UNDEFINED:
       assert(false);
       break;
     case BUY:
-      return utils::compare(instrument.position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument_0
+      return utils::compare(position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument_0
     case SELL:
-      return utils::compare(instrument.position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument_0
+      return utils::compare(position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument_0
   }
   return false;
+}
+
+template <typename T>
+bool Simple::is_my_order(Event<T> const &event) const {
+  auto &[message_info, value] = event;
+  return !strategy_id_ || strategy_id_ == value.strategy_id;
 }
 
 template <typename T>

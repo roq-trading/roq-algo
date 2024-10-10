@@ -90,7 +90,7 @@ struct Simple final : public strategy::Handler {
 
   void maybe_trade_spread(MessageInfo const &, Side, Instrument &lhs, Instrument &rhs);
 
-  bool can_trade(Side, Instrument &);
+  bool can_trade(Side, Instrument &) const;
 
   struct Order final {
     Side side = {};
@@ -116,6 +116,9 @@ struct Simple final : public strategy::Handler {
 
   template <typename T>
   void check(Event<T> const &);
+
+  template <typename T>
+  bool is_my_order(Event<T> const &) const;
 
  private:
   Dispatcher &dispatcher_;
