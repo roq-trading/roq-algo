@@ -32,6 +32,8 @@ void TimeChecker::check(MessageInfo const &message_info) {
   assert(diff >= 0ns);
   assert(message_info.receive_time_utc.count());
   // note! diff_utc can be negative (clock adjustment, sampling from different cores, etc.)
+  if (diff < 0ns) [[unlikely]]
+    log::fatal("Unexpected: internal error"sv);
 }
 
 }  // namespace tools

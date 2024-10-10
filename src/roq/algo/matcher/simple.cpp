@@ -78,48 +78,50 @@ Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_c
       market_data_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
 }
 
+// note! the following handlers **must** dispatch market data and potentially overlay with own orders / fills
+
 void Simple::operator()(Event<ReferenceData> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data
+  dispatcher_(event);  // note!
   market_data_(event);
 }
 
 void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data
+  dispatcher_(event);  // note!
   market_data_(event);
 }
 
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
+  dispatcher_(event);  // note!
   if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
+  dispatcher_(event);  // note!
   if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own orders here)
+  dispatcher_(event);  // note!
   if (market_data_(event))
     match_resting_orders(event);
 }
 
 void Simple::operator()(Event<TradeSummary> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
+  dispatcher_(event);  // note!
   market_data_(event);
 }
 
 void Simple::operator()(Event<StatisticsUpdate> const &event) {
   check(event);
-  dispatcher_(event);  // note! dispatch market data (TODO potential to overlay own fills here)
+  dispatcher_(event);  // note!
   market_data_(event);
 }
 
@@ -152,9 +154,9 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
           [[unlikely]] case UNDEFINED:
             break;
           case BUY:
-            return best_.external.second;
+            return top_of_book_.external.second;
           case SELL:
-            return best_.external.first;
+            return top_of_book_.external.first;
         }
         log::fatal("Unexpected"sv);
       }();
@@ -257,13 +259,13 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
   };
   auto &top_of_book = market_data_.top_of_book();
   auto bid = convert(top_of_book.bid_price, std::numeric_limits<int64_t>::min());
-  if (utils::update(best_.units.first, bid)) {
-    best_.external.first = top_of_book.bid_price;
+  if (utils::update(top_of_book_.internal.first, bid)) {
+    top_of_book_.external.first = top_of_book.bid_price;
     try_match(Side::BUY, matched_order);
   }
   auto ask = convert(top_of_book.ask_price, std::numeric_limits<int64_t>::max());
-  if (utils::update(best_.units.second, ask)) {
-    best_.external.second = top_of_book.ask_price;
+  if (utils::update(top_of_book_.internal.second, ask)) {
+    top_of_book_.external.second = top_of_book.ask_price;
     try_match(Side::SELL, matched_order);
   }
 }
@@ -350,11 +352,12 @@ bool Simple::is_aggressive(Side side, int64_t price) const {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
+      assert(false);
       break;
     case BUY:
-      return price >= best_.units.second;
+      return price >= top_of_book_.internal.second;
     case SELL:
-      return price <= best_.units.first;
+      return price <= top_of_book_.internal.first;
   }
   log::fatal("Unexpected"sv);
 }
@@ -363,12 +366,13 @@ void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
+      assert(false);
       log::fatal("Unexpected"sv);
     case BUY:
-      add_order_helper(buy_, compare_buy, order_id, price);
+      add_order_helper(buy_orders_, compare_buy, order_id, price);
       break;
     case SELL:
-      add_order_helper(sell_, compare_sell, order_id, price);
+      add_order_helper(sell_orders_, compare_sell, order_id, price);
       break;
   }
 }
@@ -377,11 +381,12 @@ bool Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
+      assert(false);
       break;
     case BUY:
-      return remove_order_helper(buy_, compare_buy, order_id, price);
+      return remove_order_helper(buy_orders_, compare_buy, order_id, price);
     case SELL:
-      return remove_order_helper(sell_, compare_sell, order_id, price);
+      return remove_order_helper(sell_orders_, compare_sell, order_id, price);
   }
   log::fatal("Unexpected"sv);
 }
@@ -391,15 +396,16 @@ void Simple::try_match(Side side, Callback callback) {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
+      assert(false);
       log::fatal("Unexpected"sv);
     case BUY: {
       auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
-      try_match_helper(sell_, compare, best_.units.first, order_cache_, callback);
+      try_match_helper(sell_orders_, compare, top_of_book_.internal.first, order_cache_, callback);
       break;
     }
     case SELL: {
       auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
-      try_match_helper(buy_, compare, best_.units.second, order_cache_, callback);
+      try_match_helper(buy_orders_, compare, top_of_book_.internal.second, order_cache_, callback);
       break;
     }
   }

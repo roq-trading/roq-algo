@@ -84,16 +84,17 @@ struct Simple final : public Handler {
   MarketDataSource const market_data_source_;
   OrderCache &order_cache_;
   tools::MarketData market_data_;
+  // note! internal is in units of tick_size (integer), external is real price (floating point)
   struct {
-    std::pair<int64_t, int64_t> units = {
+    std::pair<int64_t, int64_t> internal = {
         std::numeric_limits<int64_t>::min(),
         std::numeric_limits<int64_t>::max(),
     };
     std::pair<double, double> external = {NaN, NaN};
-  } best_;
-  // orders
-  std::vector<std::pair<int64_t, uint64_t>> buy_;
-  std::vector<std::pair<int64_t, uint64_t>> sell_;
+  } top_of_book_;
+  // note! ordered first by (internal) price and then by order_id to preserve priority
+  std::vector<std::pair<int64_t, uint64_t>> buy_orders_;
+  std::vector<std::pair<int64_t, uint64_t>> sell_orders_;
   // DEBUG
   tools::TimeChecker time_checker_;
 };
