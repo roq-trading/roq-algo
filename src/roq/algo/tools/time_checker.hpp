@@ -11,7 +11,11 @@ namespace algo {
 namespace tools {
 
 struct TimeChecker final {
-  void operator()(MessageInfo const &message_info) { check(message_info); }
+  void operator()([[maybe_unused]] MessageInfo const &message_info) {
+#ifndef NDEBUG
+    check(message_info);
+#endif
+  }
 
  protected:
   void check(MessageInfo const &);
