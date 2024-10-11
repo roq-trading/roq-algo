@@ -20,10 +20,9 @@ auto create_time_in_force(auto time_in_force) {
 
 // === IMPLEMENTATION ===
 
-Instrument::Instrument(
-    algo::Instrument const &item, PositionEffect position_effect, MarginMode margin_mode, TimeInForce time_in_force, MarketDataSource market_data_source)
-    : source{item.source}, exchange{item.exchange}, symbol{item.symbol}, account{item.account}, position_effect{position_effect}, margin_mode{margin_mode},
-      time_in_force{create_time_in_force(time_in_force)}, market_data_{exchange, symbol, market_data_source} {
+Instrument::Instrument(strategy::Leg const &leg, MarketDataSource market_data_source)
+    : source{leg.source}, exchange{leg.exchange}, symbol{leg.symbol}, account{leg.account}, position_effect{leg.position_effect}, margin_mode{leg.margin_mode},
+      time_in_force{create_time_in_force(leg.time_in_force)}, market_data_{exchange, symbol, market_data_source} {
 }
 
 bool Instrument::is_ready(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {

@@ -11,8 +11,9 @@
 
 #include "roq/api.hpp"
 
-#include "roq/algo/instrument.hpp"
 #include "roq/algo/market_data_source.hpp"
+
+#include "roq/algo/strategy/leg.hpp"
 
 #include "roq/algo/tools/market_data.hpp"
 #include "roq/algo/tools/position_tracker.hpp"
@@ -29,7 +30,7 @@ enum class OrderState {
 };
 
 struct Instrument final {
-  Instrument(algo::Instrument const &, PositionEffect, MarginMode, TimeInForce, MarketDataSource);
+  Instrument(strategy::Leg const &, MarketDataSource);
 
   // market data
 

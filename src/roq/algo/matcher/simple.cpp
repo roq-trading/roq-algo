@@ -73,7 +73,7 @@ void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cac
 
 Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
     : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, order_cache_{order_cache},
-      market_data_{config.instrument.exchange, config.instrument.symbol, market_data_source_} {
+      market_data_{config.exchange, config.symbol, market_data_source_} {
 }
 
 // note! the following handlers **must** dispatch market data and **may** potentially overlay own orders and fills

@@ -28,12 +28,8 @@ void BM_tools_Simple_add(benchmark::State &state) {
     uint64_t get_next_trade_id() override { return {}; }
   } order_cache;
   auto config = Config{
-      .instrument{
-          .source = 0,
-          .exchange = "deribit"sv,
-          .symbol = "BTC-PERPETUAL"sv,
-          .account = {},
-      },
+      .exchange = "deribit"sv,
+      .symbol = "BTC-PERPETUAL"sv,
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
   for (auto _ : state) {

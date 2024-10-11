@@ -32,12 +32,12 @@ template <typename R>
 auto create_instruments(auto &config) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
-  auto size = std::size(config.instruments);
+  auto size = std::size(config.legs);
   assert(size >= 2);
   if (size < 2)
-    log::fatal("Unexpected: len(config.instruments)={}"sv, size);
-  for (auto &item : config.instruments)
-    result.emplace_back(item, config.position_effect, config.margin_mode, config.time_in_force, config.market_data_source);
+    log::fatal("Unexpected: len(config.legs)={}"sv, size);
+  for (auto &item : config.legs)
+    result.emplace_back(item, config.market_data_source);
   return result;
 }
 

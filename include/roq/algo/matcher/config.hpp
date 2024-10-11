@@ -6,7 +6,6 @@
 
 #include <fmt/core.h>
 
-#include "roq/algo/instrument.hpp"
 #include "roq/algo/market_data_source.hpp"
 
 namespace roq {
@@ -14,7 +13,8 @@ namespace algo {
 namespace matcher {
 
 struct ROQ_PUBLIC Config final {
-  Instrument instrument;
+  std::string_view exchange;
+  std::string_view symbol;
   MarketDataSource market_data_source = {};
 };
 
@@ -30,10 +30,12 @@ struct fmt::formatter<roq::algo::matcher::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(instrument={}, )"
+        R"(exchange="{}", )"
+        R"(symbol="{}", )"
         R"(market_data_source={})"
         R"(}})"sv,
-        value.instrument,
+        value.exchange,
+        value.symbol,
         value.market_data_source);
   }
 };
