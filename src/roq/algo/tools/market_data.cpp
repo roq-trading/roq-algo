@@ -57,27 +57,29 @@ std::pair<int64_t, bool> MarketData::price_to_ticks(double price) const {
   return market::price_to_ticks(price, tick_size_, precision_);
 }
 
-void MarketData::operator()(Event<ReferenceData> const &event) {
+bool MarketData::operator()(Event<ReferenceData> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   auto &[message_info, reference_data] = event;
   top_of_book_(event);
   (*market_by_price_)(event);
   (*market_by_order_)(event);
+  auto result = false;
   if (utils::update(tick_size_, event.value.tick_size)) {
+    result = true;
     auto precision = market::increment_to_precision(tick_size_);
     if (static_cast<std::underlying_type<decltype(precision)>::type>(precision) < static_cast<std::underlying_type<decltype(precision_)>::type>(precision_))
       log::fatal("Unexpected"sv);  // note! we can't support loss of precision
     // XXX FIXME internal prices must now be scaled relatively...
     precision_ = precision;
   }
-  roq::utils::update(multiplier_, reference_data.multiplier);
-  roq::utils::update(min_trade_vol_, reference_data.min_trade_vol);
+  result |= utils::update(multiplier_, reference_data.multiplier);
+  result |= utils::update(min_trade_vol_, reference_data.min_trade_vol);
+  return result;
 }
 
-void MarketData::operator()(Event<MarketStatus> const &event) {
+bool MarketData::operator()(Event<MarketStatus> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
-  if (!market_status_(event))
-    return;
+  return market_status_(event);
 }
 
 bool MarketData::operator()(Event<TopOfBook> const &event) {

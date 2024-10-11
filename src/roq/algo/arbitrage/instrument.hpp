@@ -52,9 +52,8 @@ struct Instrument final {
 
   void operator()(Event<Disconnected> const &) { reset(); }
 
-  void operator()(Event<ReferenceData> const &event) { market_data_(event); }
-  void operator()(Event<MarketStatus> const &event) { market_data_(event); }
-
+  bool operator()(Event<ReferenceData> const &event) { return market_data_(event); }
+  bool operator()(Event<MarketStatus> const &event) { return market_data_(event); }
   bool operator()(Event<TopOfBook> const &event) { return market_data_(event); }
   bool operator()(Event<MarketByPriceUpdate> const &event) { return market_data_(event); }
   bool operator()(Event<MarketByOrderUpdate> const &event) { return market_data_(event); }

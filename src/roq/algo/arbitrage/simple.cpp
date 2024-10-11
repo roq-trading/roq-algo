@@ -190,8 +190,8 @@ void Simple::operator()(Event<ReferenceData> const &event) {
 void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    instrument(event);
-    update(event);
+    if (instrument(event))
+      update(event);
   };
   get_instrument(event, callback);
 }

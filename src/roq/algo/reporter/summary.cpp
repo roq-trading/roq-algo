@@ -54,7 +54,7 @@ struct Implementation final : public Handler {
       position_tracker(event);
       auto &[message_info, trade_update_2] = event;
       for (auto &fill : trade_update_2.fills) {
-        assert(roq::utils::compare(fill.quantity, 0.0) > 0);
+        assert(utils::compare(fill.quantity, 0.0) > 0);
         switch (trade_update_2.side) {
           using enum Side;
           case UNDEFINED:
@@ -79,8 +79,8 @@ struct Implementation final : public Handler {
       auto &[message_info, position_update_2] = event;
       ++position_update.total_count;
       auto position = position_update_2.long_quantity - position_update_2.short_quantity;
-      roq::utils::update_min(position_update.position_min, position);
-      roq::utils::update_max(position_update.position_max, position);
+      utils::update_min(position_update.position_min, position);
+      utils::update_max(position_update.position_max, position);
     }
 
     tools::MarketData market_data;
@@ -281,9 +281,9 @@ struct Implementation final : public Handler {
     auto callback = [&](auto &instrument) {
       if (order_ack.origin != Origin::EXCHANGE)
         return;
-      if (roq::utils::has_request_completed(order_ack.request_status))
+      if (utils::has_request_completed(order_ack.request_status))
         ++instrument.order_ack.accepted_count;
-      if (roq::utils::has_request_failed(order_ack.request_status))
+      if (utils::has_request_failed(order_ack.request_status))
         ++instrument.order_ack.rejected_count;
     };
     get_instrument(event, callback);
@@ -323,12 +323,18 @@ struct Implementation final : public Handler {
   }
 
   void operator()(Event<CustomMetricsUpdate> const &event) override {
-    // check(event); // XXX FIXME TODO doesn't yet work with the simulator (because source is SELF)
+    auto &[message_info, custom_metrics_update] = event;
+    if (message_info.receive_time.count()) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
+      // check(event);
+    }
     // XXX TODO capture
   }
 
   void operator()(Event<CustomMatrixUpdate> const &event) override {
-    // check(event); // XXX FIXME TODO doesn't yet work with the simulator (because source is SELF)
+    auto &[message_info, custom_matrix_update] = event;
+    if (message_info.receive_time.count()) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
+      // check(event);
+    }
     // XXX TODO capture
   }
 

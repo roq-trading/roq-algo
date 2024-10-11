@@ -37,8 +37,8 @@ struct MarketData final {
 
   std::chrono::nanoseconds exchange_time_utc() const { return exchange_time_utc_; }
 
-  void operator()(Event<ReferenceData> const &);
-  void operator()(Event<MarketStatus> const &);
+  bool operator()(Event<ReferenceData> const &);
+  bool operator()(Event<MarketStatus> const &);
 
   // note! depends on MarketDataSource
   bool operator()(Event<TopOfBook> const &);
