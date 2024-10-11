@@ -29,6 +29,12 @@ struct ROQ_PUBLIC Config final {
   double quantity_0 = NaN;
   double min_position_0 = NaN;
   double max_position_0 = NaN;
+  // XXX FIXME TODO following should be by instrument (leg)...
+  PositionEffect position_effect = {};
+  MarginMode margin_mode = {};
+  TimeInForce time_in_force = {};
+  //
+  uint8_t publish_source = {};
 };
 
 }  // namespace arbitrage
@@ -50,7 +56,11 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
         R"(threshold={}, )"
         R"(quantity_0={}, )"
         R"(min_position_0={}, )"
-        R"(max_position_0={})"
+        R"(max_position_0={}, )"
+        R"(position_effect={}, )"
+        R"(margin_mode={}, )"
+        R"(time_in_force={}, )"
+        R"(publish_source={})"
         R"(}})"sv,
         value.strategy_id,
         fmt::join(value.instruments, ", "sv),
@@ -59,6 +69,10 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
         value.threshold,
         value.quantity_0,
         value.min_position_0,
-        value.max_position_0);
+        value.max_position_0,
+        value.position_effect,
+        value.margin_mode,
+        value.time_in_force,
+        value.publish_source);
   }
 };

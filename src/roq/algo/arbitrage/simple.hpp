@@ -127,10 +127,7 @@ struct Simple final : public strategy::Handler {
   uint32_t const strategy_id_;
   std::chrono::nanoseconds const max_age_;  // note! only used when trading status is unavailable
   SupportType const market_data_type_;
-  double const threshold_;                              // note! abs(spread) must exceed this threshold
-  PositionEffect const position_effect_ = {};           // XXX TODO from config
-  MarginMode const margin_mode_ = {};                   // XXX TODO from config
-  TimeInForce const time_in_force_ = TimeInForce::GTC;  // XXX TODO from config
+  double const threshold_;  // note! abs(spread) must exceed this threshold
   double const quantity_0_;
   double const min_position_0_;
   double const max_position_0_;

@@ -37,7 +37,7 @@ auto create_instruments(auto &config) {
   if (size < 2)
     log::fatal("Unexpected: len(config.instruments)={}"sv, size);
   for (auto &item : config.instruments)
-    result.emplace_back(item, config.market_data_source);
+    result.emplace_back(item, config.position_effect, config.margin_mode, config.time_in_force, config.market_data_source);
   return result;
 }
 
@@ -81,7 +81,8 @@ auto create_sources(auto &instruments) {
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
     : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{create_market_data_type(config)},
       threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
-      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
+      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)},
+      publish_source_{config.publish_source} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }
@@ -103,16 +104,13 @@ void Simple::operator()(Event<Disconnected> const &event) {
   check(event);
   auto &[message_info, disconnected] = event;
   log::warn("[{}:{}] disconnected"sv, message_info.source, message_info.source_name);
-  // reset source
   auto &source = sources_[message_info.source];
   source.ready = false;
   for (auto &[name, account] : source.accounts)
     account.has_download_orders = {};
-  // note! no need to reset stream latencies
-  // XXX TODO maybe cancel working orders on other sources?
-  // reset instruments
   auto callback = [&](auto &instrument) { instrument(event); };
   get_instruments_by_source(event, callback);
+  // XXX TODO maybe cancel working orders on other sources?
 }
 
 void Simple::operator()(Event<DownloadEnd> const &event) {
@@ -448,11 +446,11 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
         .exchange = instrument.exchange,
         .symbol = instrument.symbol,
         .side = side,
-        .position_effect = position_effect_,
-        .margin_mode = margin_mode_,
+        .position_effect = instrument.position_effect,
+        .margin_mode = instrument.margin_mode,
         .max_show_quantity = NaN,
         .order_type = OrderType::LIMIT,
-        .time_in_force = time_in_force_,
+        .time_in_force = instrument.time_in_force,
         .execution_instructions = {},
         .request_template = {},
         .quantity = quantity,

@@ -29,7 +29,7 @@ enum class OrderState {
 };
 
 struct Instrument final {
-  Instrument(algo::Instrument const &, MarketDataSource);
+  Instrument(algo::Instrument const &, PositionEffect, MarginMode, TimeInForce, MarketDataSource);
 
   // market data
 
@@ -96,6 +96,9 @@ struct Instrument final {
   std::string const exchange;
   std::string const symbol;
   std::string const account;
+  PositionEffect const position_effect;
+  MarginMode const margin_mode;
+  TimeInForce const time_in_force;
 
  private:
   tools::MarketData market_data_;
