@@ -405,6 +405,8 @@ void Simple::update(MessageInfo const &message_info) {
       }
     }
   }
+  for (auto &item : instruments_)
+    publish_statistics(item);
 }
 
 void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Instrument &rhs) {
@@ -512,6 +514,61 @@ void Simple::check(Event<T> const &event) {
       get_name<T>(),
       value);
   time_checker_(event);
+}
+
+// XXX TODO proper (for now just testing the simulator)
+void Simple::publish_statistics(Instrument &instrument) {
+  auto &top_of_book = instrument.top_of_book();
+  std::array<Measurement, 4> measurements{{
+      {
+          .name = "bp"sv,
+          .value = top_of_book.bid_price,
+      },
+      {
+          .name = "bq"sv,
+          .value = top_of_book.bid_quantity,
+      },
+      {
+          .name = "ap"sv,
+          .value = top_of_book.ask_price,
+      },
+      {
+          .name = "aq"sv,
+          .value = top_of_book.ask_quantity,
+      },
+  }};
+  auto custom_metrics = CustomMetrics{
+      .label = "top_of_book"sv,
+      .account = instrument.account,
+      .exchange = instrument.exchange,
+      .symbol = instrument.symbol,
+      .measurements = measurements,
+      .update_type = UpdateType::INCREMENTAL,
+  };
+  dispatcher_.send(custom_metrics, publish_source_);
+  //
+  std::array<MatrixKey, 2> headers{{
+      "0"sv,
+      "1"sv,
+  }};
+  std::array<double, 4> data{{
+      0.0,
+      1.1,
+      2.2,
+      3.3,
+  }};
+  auto custom_matrix = CustomMatrix{
+      .label = "spreads"sv,
+      .account = {},
+      .exchange = {},
+      .symbol = {},
+      .rows = headers,
+      .columns = headers,
+      .data = data,
+      .update_type = UpdateType::INCREMENTAL,
+      .version = {},
+  };
+  dispatcher_.send(custom_matrix, publish_source_);
 }
 
 }  // namespace arbitrage

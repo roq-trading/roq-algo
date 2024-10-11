@@ -14,7 +14,9 @@ struct ROQ_PUBLIC Dispatcher {
   virtual void send(CancelOrder const &, uint8_t source, bool is_last = true) = 0;
 
   virtual void send(CancelAllOrders const &, uint8_t source) = 0;
-  virtual uint8_t broadcast(CancelAllOrders const &) = 0;
+
+  virtual void send(CustomMetrics const &, uint8_t source) = 0;
+  virtual void send(CustomMatrix const &, uint8_t source) = 0;
 };
 
 }  // namespace strategy

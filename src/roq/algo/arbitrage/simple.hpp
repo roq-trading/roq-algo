@@ -120,6 +120,8 @@ struct Simple final : public strategy::Handler {
   template <typename T>
   bool is_my_order(Event<T> const &) const;
 
+  void publish_statistics(Instrument &);
+
  private:
   Dispatcher &dispatcher_;
   uint32_t const strategy_id_;
@@ -136,6 +138,7 @@ struct Simple final : public strategy::Handler {
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;
   uint64_t max_order_id_ = {};
+  uint8_t publish_source_ = {};  // XXX TODO from config
   // DEBUG
   tools::TimeChecker time_checker_;
 };

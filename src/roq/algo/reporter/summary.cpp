@@ -322,6 +322,16 @@ struct Implementation final : public Handler {
     get_instrument(event, callback);
   }
 
+  void operator()(Event<CustomMetricsUpdate> const &event) override {
+    // check(event); // XXX FIXME TODO doesn't yet work with the simulator (because source is SELF)
+    // XXX TODO capture
+  }
+
+  void operator()(Event<CustomMatrixUpdate> const &event) override {
+    // check(event); // XXX FIXME TODO doesn't yet work with the simulator (because source is SELF)
+    // XXX TODO capture
+  }
+
   // utils
 
   template <typename T, typename Callback>
