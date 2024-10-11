@@ -100,7 +100,7 @@ struct Simple final : public strategy::Handler {
 
   struct Account final {
     bool has_download_orders = {};
-    utils::unordered_map<size_t, Order> working_orders_by_instrument;  // <<< maybe in instrument
+    utils::unordered_map<size_t, Order> working_orders_by_instrument;  // XXX FIXME TODO maybe move to instrument?
   };
 
   struct Source final {
@@ -135,7 +135,7 @@ struct Simple final : public strategy::Handler {
   std::vector<Instrument> instruments_;
   std::vector<Source> sources_;
   uint64_t max_order_id_ = {};
-  uint8_t publish_source_ = {};  // XXX TODO from config
+  uint8_t const publish_source_;
   // DEBUG
   tools::TimeChecker time_checker_;
 };
