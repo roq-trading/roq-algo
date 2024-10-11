@@ -109,7 +109,7 @@ void Simple::operator()(Event<Disconnected> const &event) {
   for (auto &[name, account] : source.accounts)
     account.has_download_orders = {};
   // note! no need to reset stream latencies
-  // XXX FIXME TODO what about working orders ???
+  // XXX TODO maybe cancel working orders on other sources?
   // reset instruments
   auto callback = [&](auto &instrument) { instrument(event); };
   get_instruments_by_source(event, callback);
@@ -159,8 +159,8 @@ void Simple::operator()(Event<StreamStatus> const &event) {
   }
 }
 
-// note! this is only a sample typically based on ping-pong between gateway and some exchange end-point
-// XXX FIXME TODO this is the real event (**NOT** correlated with simulated latency assumptions)
+// note! this is only a sample, typically based on ping-pong between gateway and some exchange end-point
+// XXX FIXME TODO this is currently the raw event-log event (**NOT** correlated with simulated latency assumptions)
 void Simple::operator()(Event<ExternalLatency> const &event) {
   check(event);
   auto &[message_info, external_latency] = event;
@@ -168,7 +168,7 @@ void Simple::operator()(Event<ExternalLatency> const &event) {
   assert(external_latency.stream_id > 0);
   auto index = external_latency.stream_id - 1;
   source.stream_latency.resize(std::max<size_t>(index + 1, std::size(source.stream_latency)));
-  source.stream_latency[index] = external_latency.latency;  // XXX TODO smooth
+  source.stream_latency[index] = external_latency.latency;  // XXX TODO exponential smoothing
 }
 
 void Simple::operator()(Event<GatewayStatus> const &event) {
@@ -176,7 +176,7 @@ void Simple::operator()(Event<GatewayStatus> const &event) {
   auto &[message_info, gateway_status] = event;
   auto &source = sources_[message_info.source];
   if (source.accounts.find(gateway_status.account) != std::end(source.accounts)) {
-    // XXX TODO use available?
+    // XXX TODO use gateway_status.available to monitor the gateway's order management availability (perhaps not connected)
   }
   update(message_info);
 }
@@ -199,8 +199,8 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    instrument(event);
-    update(event);
+    if (instrument(event))
+      update(event);
   };
   get_instrument(event, callback);
 }
@@ -208,8 +208,8 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    instrument(event);
-    update(event);
+    if (instrument(event))
+      update(event);
   };
   get_instrument(event, callback);
 }
@@ -217,8 +217,8 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    instrument(event);
-    update(event);
+    if (instrument(event))
+      update(event);
   };
   get_instrument(event, callback);
 }
@@ -241,7 +241,7 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
         break;
       case BROKER:
       case EXCHANGE:
-        assert(order_ack.round_trip_latency > 0ns);  // note! this is the real round-trip latency
+        assert(order_ack.round_trip_latency > 0ns);  // note! this is the request round-trip latency between gateway and exchange
         break;
     }
   };
@@ -269,7 +269,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
             // note! we have (re)connected to gateway and managed orders are now being downloaded
             if (!is_order_complete) {
               // note! we cancel all downloaded orders when we (re)connect to the gateway (see ready event)
-              account.has_download_orders = true;  // XXX FIXME TODO manage by instrument?
+              account.has_download_orders = true;  // XXX FIXME TODO manage this by instrument
             }
           }
           break;
@@ -293,7 +293,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
                 assert(instrument.order_id);
                 break;
               case CANCEL:
-                // note! not a hard fault because there is a race + the cancel request could be rejected (or even lost)
+                // note! **not** a hard fault because there is a race + the cancel request could be rejected (or even lost)
                 // XXX FIXME TODO maybe retry ???
                 assert(instrument.order_id);
             }
@@ -412,8 +412,8 @@ void Simple::update(MessageInfo const &message_info) {
 void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Instrument &rhs) {
   auto [bid_0, ask_0] = lhs.get_best();
   auto [bid_1, ask_1] = rhs.get_best();
-  auto spread_0 = bid_0 - ask_1;  // sell lhs, buy rhs
-  auto spread_1 = bid_1 - ask_0;  // sell rhs, buy lhs
+  auto spread_0 = bid_0 - ask_1;  // note! sell(lhs), buy(rhs)
+  auto spread_1 = bid_1 - ask_0;  // note! buy(lhs), sell(rhs)
   auto trigger_0 = threshold_ < spread_0;
   auto trigger_1 = threshold_ < spread_1;
   log::debug(
@@ -428,7 +428,6 @@ void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Inst
       trigger_0,
       spread_1,
       trigger_1);
-  // XXX FIXME TODO something to decide whether to buy or sell (based on positions? or liquidity?)
   if (trigger_0)
     maybe_trade_spread(message_info, Side::SELL, lhs, rhs);
   if (trigger_1)
@@ -441,7 +440,7 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
     assert(instrument.order_id == 0);
     instrument.order_state = OrderState::CREATE;
     instrument.order_id = ++max_order_id_;
-    auto quantity = 1.0;                                                                 // XXX TODO compute quantity
+    auto quantity = 1.0;                                                                 // XXX FIXME TODO compute quantity
     auto price = utils::price_from_side(instrument.top_of_book(), utils::invert(side));  // note! aggress liquidity on other side
     auto create_order = CreateOrder{
         .account = instrument.account,
@@ -465,7 +464,7 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
     log::debug("[{}] create_order={}"sv, instrument.source, create_order);
     try {
       dispatcher_.send(create_order, instrument.source);
-      // XXX FIXME TODO record timestamp so we can rate-limit
+      // XXX FIXME TODO record timestamp (or something like that) so we can manage rate-limitations
     } catch (NotReady &) {
       instrument.reset();
       return false;
@@ -473,9 +472,9 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
     return true;
   };
   if (can_trade(side, lhs) && helper(side, lhs)) {
-    // note! only try second leg when first succeeds
+    // note! only try second leg if first has succeeded
     if (!helper(utils::invert(side), rhs)) {
-      // note! we should try-cancel first leg when second fails
+      // note! we should try-cancel first leg if second has failed
       // XXX FIXME TODO cancel first leg
     }
   }
@@ -483,15 +482,16 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
 
 bool Simple::can_trade(Side side, Instrument &instrument) const {
   auto position = instrument.current_position();
+  auto position_0 = position;  // XXX FIXME TODO scale to base of instrument[0]
   switch (side) {
     using enum Side;
     case UNDEFINED:
       assert(false);
       break;
     case BUY:
-      return utils::compare(position, max_position_0_) < 0;  // XXX FIXME TODO scale to instrument_0
+      return utils::compare(position_0, max_position_0_) < 0;
     case SELL:
-      return utils::compare(position, min_position_0_) > 0;  // XXX FIXME TODO scale to instrument_0
+      return utils::compare(position_0, min_position_0_) > 0;
   }
   return false;
 }
@@ -516,7 +516,7 @@ void Simple::check(Event<T> const &event) {
   time_checker_(event);
 }
 
-// XXX TODO proper (for now just testing the simulator)
+// XXX FIXME TODO proper (for now, just testing simulator support)
 void Simple::publish_statistics(Instrument &instrument) {
   auto &top_of_book = instrument.top_of_book();
   std::array<Measurement, 4> measurements{{

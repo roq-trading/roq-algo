@@ -55,9 +55,9 @@ struct Instrument final {
   void operator()(Event<ReferenceData> const &event) { market_data_(event); }
   void operator()(Event<MarketStatus> const &event) { market_data_(event); }
 
-  void operator()(Event<TopOfBook> const &event) { market_data_(event); }
-  void operator()(Event<MarketByPriceUpdate> const &event) { market_data_(event); }
-  void operator()(Event<MarketByOrderUpdate> const &event) { market_data_(event); }
+  bool operator()(Event<TopOfBook> const &event) { return market_data_(event); }
+  bool operator()(Event<MarketByPriceUpdate> const &event) { return market_data_(event); }
+  bool operator()(Event<MarketByOrderUpdate> const &event) { return market_data_(event); }
 
   void operator()(Event<TradeUpdate> const &event) { position_tracker_(event); }
   void operator()(Event<PositionUpdate> const &event) { position_tracker_(event); }
