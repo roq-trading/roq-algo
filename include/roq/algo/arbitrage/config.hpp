@@ -26,7 +26,7 @@ struct ROQ_PUBLIC Config final {
   std::span<strategy::Leg const> legs;
   MarketDataSource market_data_source = {};
   std::chrono::nanoseconds max_age = {};  // used when exchange doesn't support trading status
-  double threshold = NaN;
+  double threshold = NaN;                 // abs(spread) must exceed this threshold
   double quantity_0 = NaN;
   double min_position_0 = NaN;
   double max_position_0 = NaN;

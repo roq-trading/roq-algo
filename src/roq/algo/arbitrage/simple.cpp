@@ -79,10 +79,10 @@ auto create_sources(auto &instruments) {
 // === IMPLEMENTATION ===
 
 Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
-    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, market_data_type_{create_market_data_type(config)},
-      threshold_{config.threshold}, quantity_0_{config.quantity_0}, min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0},
-      order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)}, sources_{create_sources<decltype(sources_)>(instruments_)},
-      publish_source_{config.publish_source} {
+    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, threshold_{config.threshold}, quantity_0_{config.quantity_0},
+      min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0}, publish_source_{config.publish_source},
+      market_data_type_{create_market_data_type(config)}, order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)},
+      sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }
@@ -448,6 +448,7 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
         .side = side,
         .position_effect = instrument.position_effect,
         .margin_mode = instrument.margin_mode,
+        .quantity_type = {},
         .max_show_quantity = NaN,
         .order_type = OrderType::LIMIT,
         .time_in_force = instrument.time_in_force,
