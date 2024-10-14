@@ -128,6 +128,8 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
   auto &[message_info, create_order] = event;
   auto validate = [&]() -> Error {
     // note! simulator will already have validated the request and here we just need to validate based on what is supported here
+    if (create_order.quantity_type != QuantityType{})
+      return Error::INVALID_QUANTITY_TYPE;
     if (create_order.order_type != OrderType::LIMIT)
       return Error::INVALID_ORDER_TYPE;
     if (create_order.time_in_force != TimeInForce::GTC)
@@ -224,6 +226,8 @@ void Simple::operator()(Event<CancelAllOrders> const &event) {
 // market
 
 void Simple::match_resting_orders(MessageInfo const &message_info) {
+  if (!market_data_.has_tick_size())
+    return;
   auto convert = [this](auto price, auto default_value) {
     if (!std::isnan(price)) {
       auto [units, overflow] = market_data_.price_to_ticks(price);

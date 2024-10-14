@@ -84,7 +84,7 @@ struct Simple final : public Handler {
   MarketDataSource const market_data_source_;
   OrderCache &order_cache_;
   tools::MarketData market_data_;
-  // note! internal is in units of tick_size (integer), external is real price (floating point)
+  // note! internal (integer) is in units of tick_size, external (floating point) is the real price
   struct {
     std::pair<int64_t, int64_t> internal = {
         std::numeric_limits<int64_t>::min(),
@@ -92,7 +92,7 @@ struct Simple final : public Handler {
     };
     std::pair<double, double> external = {NaN, NaN};
   } top_of_book_;
-  // note! ordered first by (internal) price and then by order_id to preserve priority
+  // note! priority is preserved by first ordering by price (internal) and then by order_id
   std::vector<std::pair<int64_t, uint64_t>> buy_orders_;
   std::vector<std::pair<int64_t, uint64_t>> sell_orders_;
   // DEBUG
