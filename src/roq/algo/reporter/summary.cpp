@@ -144,7 +144,7 @@ struct Implementation final : public Handler {
 
   // reporter
 
-  void print() const override {
+  void print(OutputType, std::string_view const &) const override {
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       print_helper(0, "source"sv, source);
       auto &tmp_1 = instruments_[source];
@@ -198,6 +198,8 @@ struct Implementation final : public Handler {
       }
     }
   }
+
+  void write(std::string_view const &, OutputType, std::string_view const &) const override {}
 
   // collector
 

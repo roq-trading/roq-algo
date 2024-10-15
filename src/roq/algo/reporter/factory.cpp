@@ -16,7 +16,8 @@ namespace reporter {
 
 namespace {
 struct None final : public Handler {
-  virtual void print() const override {}
+  virtual void print(OutputType, std::string_view const &) const override {}
+  virtual void write(std::string_view const &, OutputType, std::string_view const &) const override {}
 };
 }  // namespace
 
