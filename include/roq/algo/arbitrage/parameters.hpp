@@ -5,25 +5,19 @@
 #include "roq/compat.hpp"
 
 #include <chrono>
-#include <span>
 
 #include <fmt/chrono.h>
 #include <fmt/core.h>
-#include <fmt/ranges.h>
 
 #include "roq/api.hpp"
 
 #include "roq/algo/market_data_source.hpp"
 
-#include "roq/algo/strategy/leg.hpp"
-
 namespace roq {
 namespace algo {
 namespace arbitrage {
 
-struct ROQ_PUBLIC Config final {
-  uint32_t strategy_id = {};
-  std::span<strategy::Leg const> legs;
+struct ROQ_PUBLIC Parameters final {
   MarketDataSource market_data_source = {};
   std::chrono::nanoseconds max_age = {};  // used when exchange doesn't support trading status
   double threshold = NaN;                 // abs(spread) must exceed this threshold
@@ -38,15 +32,13 @@ struct ROQ_PUBLIC Config final {
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::arbitrage::Config> {
+struct fmt::formatter<roq::algo::arbitrage::Parameters> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::arbitrage::Config const &value, format_context &context) const {
+  auto format(roq::algo::arbitrage::Parameters const &value, format_context &context) const {
     using namespace std::literals;
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(strategy_id={}, )"
-        R"(legs=[{}], )"
         R"(market_data_source={}, )"
         R"(max_age={}, )"
         R"(threshold={}, )"
@@ -55,8 +47,6 @@ struct fmt::formatter<roq::algo::arbitrage::Config> {
         R"(max_position_0={}, )"
         R"(publish_source={})"
         R"(}})"sv,
-        value.strategy_id,
-        fmt::join(value.legs, ", "sv),
         value.market_data_source,
         value.max_age,
         value.threshold,

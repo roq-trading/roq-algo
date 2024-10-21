@@ -29,7 +29,7 @@ auto create_market_data_type(auto &config) -> SupportType {
 }
 
 template <typename R>
-auto create_instruments(auto &config) {
+auto create_instruments(auto &config, auto &parameters) {
   using result_type = std::remove_cvref<R>::type;
   result_type result;
   auto size = std::size(config.legs);
@@ -37,7 +37,7 @@ auto create_instruments(auto &config) {
   if (size < 2)
     log::fatal("Unexpected: len(config.legs)={}"sv, size);
   for (auto &item : config.legs)
-    result.emplace_back(item, config.market_data_source);
+    result.emplace_back(item, parameters.market_data_source);
   return result;
 }
 
@@ -78,11 +78,11 @@ auto create_sources(auto &instruments) {
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(strategy::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
-    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{config.max_age}, threshold_{config.threshold}, quantity_0_{config.quantity_0},
-      min_position_0_{config.min_position_0}, max_position_0_{config.max_position_0}, publish_source_{config.publish_source},
-      market_data_type_{create_market_data_type(config)}, order_cache_{order_cache}, instruments_{create_instruments<decltype(instruments_)>(config)},
-      sources_{create_sources<decltype(sources_)>(instruments_)} {
+Simple::Simple(strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, Parameters const &parameters)
+    : dispatcher_{dispatcher}, strategy_id_{config.strategy_id}, max_age_{parameters.max_age}, threshold_{parameters.threshold},
+      quantity_0_{parameters.quantity_0}, min_position_0_{parameters.min_position_0}, max_position_0_{parameters.max_position_0},
+      publish_source_{parameters.publish_source}, market_data_type_{create_market_data_type(parameters)}, order_cache_{order_cache},
+      instruments_{create_instruments<decltype(instruments_)>(config, parameters)}, sources_{create_sources<decltype(sources_)>(instruments_)} {
   assert(!std::empty(instruments_));
   assert(!std::empty(sources_));
 }

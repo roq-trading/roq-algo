@@ -11,11 +11,12 @@
 
 #include "roq/algo/tools/time_checker.hpp"
 
+#include "roq/algo/strategy/config.hpp"
 #include "roq/algo/strategy/dispatcher.hpp"
 #include "roq/algo/strategy/handler.hpp"
 
-#include "roq/algo/arbitrage/config.hpp"
 #include "roq/algo/arbitrage/instrument.hpp"
+#include "roq/algo/arbitrage/parameters.hpp"
 
 namespace roq {
 namespace algo {
@@ -40,7 +41,7 @@ namespace arbitrage {
 struct Simple final : public strategy::Handler {
   using Dispatcher = strategy::Dispatcher;
 
-  Simple(Dispatcher &, Config const &, OrderCache &);
+  Simple(Dispatcher &, OrderCache &, Config const &, Parameters const &);
 
   Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
