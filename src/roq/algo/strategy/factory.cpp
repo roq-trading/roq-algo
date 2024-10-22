@@ -18,6 +18,8 @@ std::unique_ptr<strategy::Handler> Factory::create(
     Type type, strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, std::string_view const &parameters) {
   switch (type) {
     using enum Type;
+    case UNDEFINED:
+      break;
     case ARBITRAGE:
       return arbitrage::Factory::create(dispatcher, order_cache, config, parameters);
   }
@@ -27,6 +29,8 @@ std::unique_ptr<strategy::Handler> Factory::create(
 std::span<strategy::Meta const> Factory::get_meta(Type type) {
   switch (type) {
     using enum Type;
+    case UNDEFINED:
+      break;
     case ARBITRAGE:
       return arbitrage::Factory::get_meta();
   }

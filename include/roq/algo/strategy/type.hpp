@@ -8,18 +8,21 @@
 
 namespace roq {
 namespace algo {
+namespace strategy {
 
 enum class Type {
+  UNDEFINED,
   ARBITRAGE,
 };
 
+}  // namespace strategy
 }  // namespace algo
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::Type> {
+struct fmt::formatter<roq::algo::strategy::Type> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::Type const &value, format_context &context) const {
+  auto format(roq::algo::strategy::Type const &value, format_context &context) const {
     using namespace std::literals;
     return fmt::format_to(context.out(), "{}"sv, magic_enum::enum_name(value));
   }
