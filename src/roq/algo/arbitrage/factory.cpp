@@ -4,6 +4,10 @@
 
 #include "roq/logging.hpp"
 
+#include "roq/utils/variant/parse.hpp"
+
+#include "roq/utils/key_value/parser.hpp"
+
 #include "roq/algo/arbitrage/simple.hpp"
 
 using namespace std::literals;
@@ -11,6 +15,55 @@ using namespace std::literals;
 namespace roq {
 namespace algo {
 namespace arbitrage {
+
+// === CONSTANTS ===
+
+namespace {
+std::array<strategy::Meta, 7> const META{{
+    {
+        .name = "market_data_source"sv,
+        .type = VariantType::ENUM,
+        .required = false,
+        .description = "Market data source"sv,
+    },
+    {
+        .name = "max_age"sv,
+        .type = VariantType::DATETIME,
+        .required = false,
+        .description = "Maximum market data age"sv,
+    },
+    {
+        .name = "threshold"sv,
+        .type = VariantType::DOUBLE,
+        .required = false,
+        .description = "Trade will be initiated if spread exceeds this value"sv,
+    },
+    {
+        .name = "quantity_0"sv,
+        .type = VariantType::DOUBLE,
+        .required = false,
+        .description = "Quantity of the first leg (index 0)"sv,
+    },
+    {
+        .name = "min_position_0"sv,
+        .type = VariantType::DOUBLE,
+        .required = false,
+        .description = "Minimum position of the first leg (index 0)"sv,
+    },
+    {
+        .name = "max_position_0"sv,
+        .type = VariantType::DOUBLE,
+        .required = false,
+        .description = "Maximum position of the first leg (index 0)"sv,
+    },
+    {
+        .name = "publish_source"sv,
+        .type = VariantType::UINT8,
+        .required = false,
+        .description = "Source (index) used for publishing custom metrics"sv,
+    },
+}};
+}
 
 // === HELPERS ===
 
@@ -23,68 +76,50 @@ auto parse_enum(auto &value) {
   return result.value();
 }
 
-enum class Key {
-  MARKET_DATA_SOURCE,
-  MAX_AGE,
-  THRESHOLD,
-  QUANTITY_0,
-  MIN_POSITION_0,
-  MAX_POSITION_0,
-  PUBLISH_SOURCE,
-};
-
 auto parameters_from_string(auto &parameters) {
   Parameters result;
-  auto callback_2 = [&](auto &key, auto &value) {
+  // parse
+  auto callback = [&](auto &key, auto &value) {
     assert(!std::empty(key));
     assert(!std::empty(value));
+    enum class Key {
+      MARKET_DATA_SOURCE,
+      MAX_AGE,
+      THRESHOLD,
+      QUANTITY_0,
+      MIN_POSITION_0,
+      MAX_POSITION_0,
+      PUBLISH_SOURCE,
+    };
     auto key_2 = parse_enum<Key>(key);
-    log::warn(R"(key={}, value="{}")"sv, magic_enum::enum_name(key_2), value);
+    log::debug(R"(key={}, value="{}")"sv, magic_enum::enum_name(key_2), value);
     switch (key_2) {
-      using enum Key;
-      case MARKET_DATA_SOURCE:
-        // result.market_data_source = MarketDataSource::TOP_OF_BOOK;  // XXX FIXME TODO parse value
+      case Key::MARKET_DATA_SOURCE:
+        utils::variant::parse(result.market_data_source, value);
         break;
-      case MAX_AGE:
-        result.max_age = 10s;  // XXX FIXME TODO parse value
+      case Key::MAX_AGE:
+        result.max_age = 10s;  // XXX FIXME TODO parse period
         break;
-      case THRESHOLD:
-        result.threshold = 5.0;  // XXX FIXME TODO parse value
+      case Key::THRESHOLD:
+        utils::variant::parse(result.threshold, value);
         break;
-      case QUANTITY_0:
-        result.quantity_0 = 1.0;  // XXX FIXME TODO parse value
+      case Key::QUANTITY_0:
+        utils::variant::parse(result.quantity_0, value);
         break;
-      case MIN_POSITION_0:
-        result.min_position_0 = -5.0;  // XXX FIXME TODO parse value
+      case Key::MIN_POSITION_0:
+        utils::variant::parse(result.min_position_0, value);
         break;
-      case MAX_POSITION_0:
-        result.max_position_0 = 5.0;  // XXX FIXME TODO parse value
+      case Key::MAX_POSITION_0:
+        utils::variant::parse(result.max_position_0, value);
         break;
-      case PUBLISH_SOURCE:
-        result.publish_source = 0;  // XXX FIXME TODO parse value
+      case Key::PUBLISH_SOURCE:
+        utils::variant::parse(result.publish_source, value);
         break;
     }
   };
-  auto callback_1 = [&](auto &key_value) {
-    assert(!std::empty(key_value));
-    auto pos = key_value.find('=');
-    if (pos == key_value.npos)
-      log::fatal(R"(Unexpected: key_value="{}" (parameters="{}")"sv, key_value, parameters);
-    auto key = key_value.substr(0, pos);
-    auto value = key_value.substr(pos + 1);
-    callback_2(key, value);
-  };
-  auto tmp = parameters;
-  while (true) {
-    auto pos = tmp.find(';');
-    if (pos == tmp.npos)
-      break;
-    auto tmp_1 = tmp.substr(0, pos);
-    callback_1(tmp_1);
-    tmp = tmp.substr(pos + 1);
-  }
-  if (!std::empty(tmp))
-    callback_1(tmp);
+  utils::key_value::Parser::dispatch(parameters, callback);
+  // validate
+  // XXX FIXME TODO implement
   return result;
 }
 }  // namespace
@@ -92,15 +127,19 @@ auto parameters_from_string(auto &parameters) {
 // === IMPLEMENTATION ===
 
 std::unique_ptr<strategy::Handler> Factory::create(
-    strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, Parameters const &parameters) {
+    strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, Parameters const &parameters) {
   return std::make_unique<Simple>(dispatcher, order_cache, config, parameters);
 }
 
 std::unique_ptr<strategy::Handler> Factory::create(
-    strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, std::string_view const &parameters) {
+    strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, std::string_view const &parameters) {
   auto parameters_2 = parameters_from_string(parameters);
   log::debug("parameters={}"sv, parameters_2);
   return create(dispatcher, order_cache, config, parameters_2);
+}
+
+std::span<strategy::Meta const> Factory::get_meta() {
+  return META;
 }
 
 }  // namespace arbitrage

@@ -13,21 +13,21 @@
 
 namespace roq {
 namespace algo {
-namespace arbitrage {
+namespace strategy {
 
 struct ROQ_PUBLIC Config final {
   std::span<strategy::Leg const> legs;
   uint32_t strategy_id = {};
 };
 
-}  // namespace arbitrage
+}  // namespace strategy
 }  // namespace algo
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::arbitrage::Config> {
+struct fmt::formatter<roq::algo::strategy::Config> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::arbitrage::Config const &value, format_context &context) const {
+  auto format(roq::algo::strategy::Config const &value, format_context &context) const {
     using namespace std::literals;
     return fmt::format_to(
         context.out(),

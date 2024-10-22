@@ -1,6 +1,7 @@
 add_subdirectory(arbitrage)
 add_subdirectory(matcher)
 add_subdirectory(reporter)
+add_subdirectory(strategy)
 add_subdirectory(tools)
 
 set(TARGET_NAME ${PROJECT_NAME})

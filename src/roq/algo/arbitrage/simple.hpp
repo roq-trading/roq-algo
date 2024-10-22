@@ -41,7 +41,7 @@ namespace arbitrage {
 struct Simple final : public strategy::Handler {
   using Dispatcher = strategy::Dispatcher;
 
-  Simple(Dispatcher &, OrderCache &, Config const &, Parameters const &);
+  Simple(Dispatcher &, OrderCache &, strategy::Config const &, Parameters const &);
 
   Simple(Simple &&) = delete;
   Simple(Simple const &) = delete;
