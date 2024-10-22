@@ -26,6 +26,7 @@ include(GNUInstallDirs)
 
 find_package(fmt REQUIRED)
 find_package(magic_enum REQUIRED)
+find_package(nameof REQUIRED)
 find_package(roq-api REQUIRED)
 find_package(roq-cache REQUIRED)
 find_package(roq-logging REQUIRED)
