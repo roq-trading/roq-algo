@@ -13,9 +13,19 @@ namespace algo {
 namespace tools {
 
 struct PositionTracker final {
+  // note! PositionUpdate
+
   double current_position() const { return current_position_; }
-  // note! returns {position, profit}
-  std::pair<double, double> compute_pnl(double current_price, double multiplier) const;
+
+  // note! from TradeUpdate
+
+  double position() const { return position_; }
+
+  // note! returns {realized_profit, unrealized_profit, average_price}
+  std::tuple<double, double, double> compute_pnl(double mark_price, double multiplier) const;
+
+  // note! returns {buy_volume, sell_volume, total_volume}
+  std::tuple<double, double, double> current_volume() const { return {buy_volume_, sell_volume_, total_volume_}; }
 
   void operator()(Event<TradeUpdate> const &);
   void operator()(Event<PositionUpdate> const &);
@@ -32,10 +42,15 @@ struct PositionTracker final {
   }
 
  private:
-  double current_position_ = 0.0;
+  double current_position_ = 0.0;  // note! from PositionUpdate
   // ...
-  double position_ = 0.0;
+  double position_ = 0.0;  // note! from TradeUpdate
   double cost_ = 0.0;
+  double realized_ = 0.0;
+  // ...
+  double buy_volume_ = 0.0;
+  double sell_volume_ = 0.0;
+  double total_volume_ = 0.0;
 };
 
 }  // namespace tools

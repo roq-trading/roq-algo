@@ -249,7 +249,7 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
 
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   check(event);
-  if (is_my_order(event)) {
+  if (is_mine(event)) {
     auto &[message_info, order_update] = event;
     auto &source = sources_[message_info.source];
     auto is_order_complete = utils::is_order_complete(order_update.order_status);
@@ -309,7 +309,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
 
 void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
   check(event);
-  if (is_my_order(event)) {
+  if (is_mine(event)) {
     auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) { instrument(event); };
     get_account_and_instrument(event, callback);
   }
@@ -319,6 +319,17 @@ void Simple::operator()(Event<PositionUpdate> const &event) {
   check(event);
   auto callback = [&]([[maybe_unused]] auto &account, auto &instrument) { instrument(event); };
   get_account_and_instrument(event, callback);
+}
+
+void Simple::operator()(Event<FundsUpdate> const &event) {
+  check(event);
+}
+
+void Simple::operator()(Event<PortfolioUpdate> const &event) {
+  check(event);
+  if (is_mine(event)) {
+    assert(false);  // XXX FIXME TODO implement (when supported)
+  }
 }
 
 // utils
@@ -496,7 +507,7 @@ bool Simple::can_trade(Side side, Instrument &instrument) const {
 }
 
 template <typename T>
-bool Simple::is_my_order(Event<T> const &event) const {
+bool Simple::is_mine(Event<T> const &event) const {
   auto &[message_info, value] = event;
   return !strategy_id_ || strategy_id_ == value.strategy_id;
 }

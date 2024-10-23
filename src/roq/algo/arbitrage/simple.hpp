@@ -73,6 +73,9 @@ struct Simple final : public strategy::Handler {
   void operator()(Event<TradeUpdate> const &, cache::Order const &) override;
 
   void operator()(Event<PositionUpdate> const &) override;
+  void operator()(Event<FundsUpdate> const &) override;
+
+  void operator()(Event<PortfolioUpdate> const &) override;
 
   // utils
 
@@ -119,7 +122,7 @@ struct Simple final : public strategy::Handler {
   void check(Event<T> const &);
 
   template <typename T>
-  bool is_my_order(Event<T> const &) const;
+  bool is_mine(Event<T> const &) const;
 
   void publish_statistics(Instrument &);
 

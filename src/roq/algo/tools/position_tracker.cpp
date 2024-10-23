@@ -6,7 +6,7 @@
 
 #include "roq/logging.hpp"
 
-#include "roq/utils/common.hpp"
+#include "roq/utils/compare.hpp"
 
 using namespace std::literals;
 
@@ -16,9 +16,16 @@ namespace tools {
 
 // === IMPLEMENTATION ===
 
-std::pair<double, double> PositionTracker::compute_pnl(double current_price, double multiplier) const {
-  auto profit = current_price * position_ - cost_;  // note! simplified calculation of p&l
-  return {position_, profit};
+std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_price, double multiplier) const {
+  auto tmp_1 = mark_price * position_ - cost_;
+  auto unrealized = std::isnan(tmp_1) ? 0.0 : tmp_1;
+  auto tmp_2 = cost_ / position_;
+  auto average_price = std::isfinite(tmp_2) ? tmp_2 : NaN;
+  return {
+      realized_,
+      unrealized,
+      average_price,
+  };
 }
 
 void PositionTracker::operator()(Event<TradeUpdate> const &event) {
@@ -32,11 +39,41 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
       assert(false);  // XXX FIXME TODO support download
       break;
     case INCREMENTAL: {
-      auto sign = utils::sign(trade_update.side);
+      // note! switch is inside loop because price can be different for each fill + we need to track when position crosses long/short
       for (auto &item : trade_update.fills) {
-        auto amount = item.quantity * sign;
-        position_ += amount;
-        cost_ += amount * item.price;
+        switch (trade_update.side) {
+          using enum Side;
+          case UNDEFINED:
+            assert(false);
+            break;
+          case BUY: {
+            auto position = position_ + item.quantity;
+            if (utils::compare(position_, 0.0) < 0 && utils::compare(position, 0.0) >= 0) {  // note! close short
+              cost_ -= position_ * item.price;
+              realized_ -= cost_;
+              cost_ = position * item.price;
+            } else {
+              cost_ += item.quantity * item.price;
+            }
+            position_ = position;
+            buy_volume_ += item.quantity;
+            break;
+          }
+          case SELL: {
+            auto position = position_ - item.quantity;
+            if (utils::compare(position_, 0.0) > 0 && utils::compare(position, 0.0) <= 0) {  // note! close long
+              cost_ -= position_ * item.price;
+              realized_ -= cost_;
+              cost_ = position * item.price;
+            } else {
+              cost_ -= item.quantity * item.price;
+            }
+            position_ = position;
+            sell_volume_ += item.quantity;
+            break;
+          }
+        }
+        total_volume_ += item.quantity;
       }
       break;
     }

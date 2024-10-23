@@ -135,9 +135,16 @@ struct Implementation final : public Handler {
     } position_update;
     // history
     struct History final {
-      double price = NaN;  // last
+      double best_bid_price = NaN;
+      double best_ask_price = NaN;
       double position = NaN;
-      double profit = NaN;
+      double realized_profit = NaN;
+      double unrealized_profit = NaN;
+      double average_price = NaN;
+      double mark_price = NaN;
+      double buy_volume = NaN;
+      double sell_volume = NaN;
+      double total_volume = NaN;
     };
     std::vector<std::pair<std::chrono::nanoseconds, History>> history;
   };
@@ -190,9 +197,16 @@ struct Implementation final : public Handler {
           print_helper(8, "history"sv);
           for (auto &[sample_period_utc, history] : instrument.history) {
             print_helper(10, "sample_period_utc"sv, sample_period_utc);
-            print_helper(12, "price"sv, history.price);
+            print_helper(12, "best_bid_price"sv, history.best_bid_price);
+            print_helper(12, "best_ask_price"sv, history.best_ask_price);
             print_helper(12, "position"sv, history.position);
-            print_helper(12, "profit"sv, history.profit);
+            print_helper(12, "realized_profit"sv, history.realized_profit);
+            print_helper(12, "unrealized_profit"sv, history.unrealized_profit);
+            print_helper(12, "average_price"sv, history.average_price);
+            print_helper(12, "mark_price"sv, history.mark_price);
+            print_helper(12, "buy_volume"sv, history.buy_volume);
+            print_helper(12, "sell_volume"sv, history.sell_volume);
+            print_helper(12, "total_volume"sv, history.total_volume);
           }
         }
       }
@@ -358,22 +372,48 @@ struct Implementation final : public Handler {
   }
 
   void update_best(Instrument &instrument) {
-    auto &top_of_book = instrument.market_data.top_of_book();
-    auto mid_price = 0.5 * (top_of_book.bid_price + top_of_book.ask_price);  // XXX FIXME TODO deal with one-sided and missing
-    auto [position, profit] = instrument.position_tracker.compute_pnl(mid_price, 1.0);
+    auto position = instrument.position_tracker.position();
+    assert(!std::isnan(position));
+    auto &top_of_book = instrument.market_data.top_of_book();  // XXX FIXME TODO use impact price using std::fabs(position) !!!
+    auto mark_price = [&]() -> double {
+      if (utils::compare(position, 0.0) == 0)
+        return NaN;
+      if (position > 0.0)
+        return top_of_book.bid_price;
+      return top_of_book.ask_price;
+    }();
+    auto multiplier = 1.0;  // XXX FIXME TODO get from reference data
+    auto [realized_profit, unrealized_profit, average_price] = instrument.position_tracker.compute_pnl(mark_price, multiplier);
+    auto [buy_volume, sell_volume, total_volume] = instrument.position_tracker.current_volume();
     assert(sample_period_utc_.count());
     if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
       auto history = Instrument::History{
-          .price = mid_price,
+          .best_bid_price = top_of_book.bid_price,
+          .best_ask_price = top_of_book.ask_price,
           .position = position,
-          .profit = profit,
+          .realized_profit = realized_profit,
+          .unrealized_profit = unrealized_profit,
+          .average_price = average_price,
+          .mark_price = mark_price,
+          .buy_volume = buy_volume,
+          .sell_volume = sell_volume,
+          .total_volume = total_volume,
       };
       instrument.history.emplace_back(sample_period_utc_, std::move(history));
     } else {
       auto &history = instrument.history[std::size(instrument.history) - 1].second;
-      history.price = mid_price;
-      history.position = position;
-      history.profit = profit;
+      new (&history) Instrument::History{
+          .best_bid_price = top_of_book.bid_price,
+          .best_ask_price = top_of_book.ask_price,
+          .position = position,
+          .realized_profit = realized_profit,
+          .unrealized_profit = unrealized_profit,
+          .average_price = average_price,
+          .mark_price = mark_price,
+          .buy_volume = buy_volume,
+          .sell_volume = sell_volume,
+          .total_volume = total_volume,
+      };
     }
   }
 
