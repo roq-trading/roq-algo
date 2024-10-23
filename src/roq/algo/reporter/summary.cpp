@@ -151,7 +151,26 @@ struct Implementation final : public Handler {
 
   // reporter
 
-  void print(OutputType, std::string_view const &) const override {
+  void print(OutputType output_type, std::string_view const &label) const override {
+    switch (output_type) {
+      using enum OutputType;
+      case TEXT:
+        if (!std::empty(label))
+          throw RuntimeError{R"(Unexpected: label="{}")"sv, label};
+        print_text();
+        break;
+      case JSON:
+        print_json(label);
+        break;
+      case CSV:
+        if (label != "history"sv)
+          throw RuntimeError{R"(Unexpected: label="{}")"sv, label};
+        print_csv_history();
+        break;
+    }
+  }
+
+  void print_text() const {
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       print_helper(0, "source"sv, source);
       auto &tmp_1 = instruments_[source];
@@ -207,6 +226,31 @@ struct Implementation final : public Handler {
             print_helper(12, "buy_volume"sv, history.buy_volume);
             print_helper(12, "sell_volume"sv, history.sell_volume);
             print_helper(12, "total_volume"sv, history.total_volume);
+          }
+        }
+      }
+    }
+  }
+
+  void print_json(std::string_view const &label) const {}
+
+  void print_csv_history() const {
+    fmt::print("source,exchange,symbol,datetime"sv);
+    fmt::print(",best_bid_price,best_ask_price"sv);
+    fmt::print(",position,realized_profit,unrealized_profit,average_cost_price,mark_price"sv);
+    fmt::print(",buy_volume,sell_volume,total_volume"sv);
+    fmt::print("\n"sv);
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[sample_period_utc, history] : instrument.history) {
+            fmt::print("{},{},{},{}"sv, source, exchange, symbol, sample_period_utc);
+            fmt::print(",{},{}"sv, history.best_bid_price, history.best_ask_price);
+            fmt::print(
+                ",{},{},{},{},{}"sv, history.position, history.realized_profit, history.unrealized_profit, history.average_cost_price, history.mark_price);
+            fmt::print(",{},{},{}"sv, history.buy_volume, history.sell_volume, history.total_volume);
+            fmt::print("\n"sv);
           }
         }
       }
