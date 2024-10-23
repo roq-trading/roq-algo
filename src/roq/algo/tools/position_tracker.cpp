@@ -20,11 +20,11 @@ std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_pric
   auto tmp_1 = mark_price * position_ - cost_;
   auto unrealized_profit = std::isnan(tmp_1) ? 0.0 : tmp_1;
   auto tmp_2 = cost_ / position_;
-  auto average_cost_price = std::isfinite(tmp_2) ? tmp_2 : NaN;
+  auto average_price = std::isfinite(tmp_2) ? tmp_2 : NaN;
   return {
       realized_profit_,
       unrealized_profit,
-      average_cost_price,
+      average_price,
   };
 }
 

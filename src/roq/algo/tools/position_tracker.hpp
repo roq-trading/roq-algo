@@ -21,7 +21,7 @@ struct PositionTracker final {
 
   double position() const { return position_; }
 
-  // note! returns {realized_profit, unrealized_profit, average_cost_price}
+  // note! returns {realized_profit, unrealized_profit, average_price}
   std::tuple<double, double, double> compute_pnl(double mark_price, double multiplier) const;
 
   // note! returns {buy_volume, sell_volume, total_volume}

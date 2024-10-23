@@ -50,7 +50,7 @@ struct Implementation final : public Handler {
     Instrument(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
         : market_data{exchange, symbol, market_data_source} {}
 
-    void operator()(Event<TradeUpdate> const &event) {
+    bool operator()(Event<TradeUpdate> const &event) {
       position_tracker(event);
       auto &[message_info, trade_update_2] = event;
       for (auto &fill : trade_update_2.fills) {
@@ -72,15 +72,17 @@ struct Implementation final : public Handler {
         ++trade_update.fills.total_count;
         trade_update.fills.total_volume += fill.quantity;
       }
+      return true;
     }
 
-    void operator()(Event<PositionUpdate> const &event) {
+    bool operator()(Event<PositionUpdate> const &event) {
       position_tracker(event);
       auto &[message_info, position_update_2] = event;
       ++position_update.total_count;
       auto position = position_update_2.long_quantity - position_update_2.short_quantity;
       utils::update_min(position_update.position_min, position);
       utils::update_max(position_update.position_max, position);
+      return true;
     }
 
     tools::MarketData market_data;
@@ -133,20 +135,26 @@ struct Implementation final : public Handler {
       double position_min = NaN;
       double position_max = NaN;
     } position_update;
-    // history
-    struct History final {
+    // samples
+    struct Sample final {
       double best_bid_price = NaN;
       double best_ask_price = NaN;
-      double position = NaN;
-      double realized_profit = NaN;
-      double unrealized_profit = NaN;
-      double average_cost_price = NaN;
-      double mark_price = NaN;
       double buy_volume = NaN;
       double sell_volume = NaN;
-      double total_volume = NaN;
+      double position = NaN;
+      double average_price = NaN;
+      double mark_price = NaN;
+      double unrealized_profit = NaN;
+      double realized_profit = NaN;
     };
-    std::vector<std::pair<std::chrono::nanoseconds, History>> history;
+    std::vector<std::pair<std::chrono::nanoseconds, Sample>> history;
+    // orders
+    struct Order final {
+      Side side = {};
+      double traded_quantity = NaN;
+      double average_price = NaN;
+    };
+    // utils::unordered_map<uint64_t, std::vector<
   };
 
   // reporter
@@ -218,14 +226,13 @@ struct Implementation final : public Handler {
             print_helper(10, "sample_period_utc"sv, sample_period_utc);
             print_helper(12, "best_bid_price"sv, history.best_bid_price);
             print_helper(12, "best_ask_price"sv, history.best_ask_price);
-            print_helper(12, "position"sv, history.position);
-            print_helper(12, "realized_profit"sv, history.realized_profit);
-            print_helper(12, "unrealized_profit"sv, history.unrealized_profit);
-            print_helper(12, "average_cost_price"sv, history.average_cost_price);
-            print_helper(12, "mark_price"sv, history.mark_price);
             print_helper(12, "buy_volume"sv, history.buy_volume);
             print_helper(12, "sell_volume"sv, history.sell_volume);
-            print_helper(12, "total_volume"sv, history.total_volume);
+            print_helper(12, "position"sv, history.position);
+            print_helper(12, "average_price"sv, history.average_price);
+            print_helper(12, "mark_price"sv, history.mark_price);
+            print_helper(12, "unrealized_profit"sv, history.unrealized_profit);
+            print_helper(12, "realized_profit"sv, history.realized_profit);
           }
         }
       }
@@ -235,21 +242,21 @@ struct Implementation final : public Handler {
   void print_json(std::string_view const &label) const {}
 
   void print_csv_history() const {
-    fmt::print("source,exchange,symbol,datetime"sv);
+    fmt::print("source,exchange,symbol,datetime_utc"sv);
     fmt::print(",best_bid_price,best_ask_price"sv);
-    fmt::print(",position,realized_profit,unrealized_profit,average_cost_price,mark_price"sv);
-    fmt::print(",buy_volume,sell_volume,total_volume"sv);
+    fmt::print(",buy_volume,sell_volume"sv);
+    fmt::print(",position,realized_profit,unrealized_profit,average_price,mark_price"sv);
     fmt::print("\n"sv);
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
         for (auto &[symbol, instrument] : tmp_2) {
           for (auto &[sample_period_utc, history] : instrument.history) {
-            fmt::print("{},{},{},{}"sv, source, exchange, symbol, sample_period_utc);
+            auto datetime_utc = std::chrono::duration_cast<std::chrono::seconds>(sample_period_utc);
+            fmt::print(R"({},"{}","{}",{})"sv, source, exchange, symbol, datetime_utc.count());
             fmt::print(",{},{}"sv, history.best_bid_price, history.best_ask_price);
-            fmt::print(
-                ",{},{},{},{},{}"sv, history.position, history.realized_profit, history.unrealized_profit, history.average_cost_price, history.mark_price);
-            fmt::print(",{},{},{}"sv, history.buy_volume, history.sell_volume, history.total_volume);
+            fmt::print(",{},{}"sv, history.buy_volume, history.sell_volume);
+            fmt::print(",{},{},{},{},{}"sv, history.position, history.realized_profit, history.unrealized_profit, history.average_price, history.mark_price);
             fmt::print("\n"sv);
           }
         }
@@ -292,7 +299,7 @@ struct Implementation final : public Handler {
     auto callback = [&](auto &instrument) {
       ++instrument.top_of_book.total_count;
       if (instrument.market_data(event))
-        update_best(instrument);
+        update_history(instrument);
     };
     get_instrument(event, callback);
   }
@@ -302,7 +309,7 @@ struct Implementation final : public Handler {
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_price_update.total_count;
       if (instrument.market_data(event))
-        update_best(instrument);
+        update_history(instrument);
     };
     get_instrument(event, callback);
   }
@@ -312,7 +319,7 @@ struct Implementation final : public Handler {
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_order_update.total_count;
       if (instrument.market_data(event))
-        update_best(instrument);
+        update_history(instrument);
     };
     get_instrument(event, callback);
   }
@@ -372,13 +379,19 @@ struct Implementation final : public Handler {
 
   void operator()(Event<TradeUpdate> const &event) override {
     check(event);
-    auto callback = [&](auto &instrument) { instrument(event); };
+    auto callback = [&](auto &instrument) {
+      if (instrument(event))
+        update_history(instrument);
+    };
     get_instrument(event, callback);
   }
 
   void operator()(Event<PositionUpdate> const &event) override {
     check(event);
-    auto callback = [&](auto &instrument) { instrument(event); };
+    auto callback = [&](auto &instrument) {
+      if (instrument(event))
+        update_history(instrument);
+    };
     get_instrument(event, callback);
   }
 
@@ -415,7 +428,7 @@ struct Implementation final : public Handler {
     callback(instrument);
   }
 
-  void update_best(Instrument &instrument) {
+  void update_history(Instrument &instrument) {
     auto position = instrument.position_tracker.position();
     assert(!std::isnan(position));
     auto &top_of_book = instrument.market_data.top_of_book();  // XXX FIXME TODO use impact price using std::fabs(position) !!!
@@ -427,36 +440,34 @@ struct Implementation final : public Handler {
       return top_of_book.ask_price;
     }();
     auto multiplier = 1.0;  // XXX FIXME TODO get from reference data
-    auto [realized_profit, unrealized_profit, average_cost_price] = instrument.position_tracker.compute_pnl(mark_price, multiplier);
+    auto [realized_profit, unrealized_profit, average_price] = instrument.position_tracker.compute_pnl(mark_price, multiplier);
     auto [buy_volume, sell_volume, total_volume] = instrument.position_tracker.current_volume();
     assert(sample_period_utc_.count());
     if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
-      auto history = Instrument::History{
+      auto sample = Instrument::Sample{
           .best_bid_price = top_of_book.bid_price,
           .best_ask_price = top_of_book.ask_price,
-          .position = position,
-          .realized_profit = realized_profit,
-          .unrealized_profit = unrealized_profit,
-          .average_cost_price = average_cost_price,
-          .mark_price = mark_price,
           .buy_volume = buy_volume,
           .sell_volume = sell_volume,
-          .total_volume = total_volume,
+          .position = position,
+          .average_price = average_price,
+          .mark_price = mark_price,
+          .unrealized_profit = unrealized_profit,
+          .realized_profit = realized_profit,
       };
-      instrument.history.emplace_back(sample_period_utc_, std::move(history));
+      instrument.history.emplace_back(sample_period_utc_, std::move(sample));
     } else {
-      auto &history = instrument.history[std::size(instrument.history) - 1].second;
-      new (&history) Instrument::History{
+      auto &sample = instrument.history[std::size(instrument.history) - 1].second;
+      new (&sample) Instrument::Sample{
           .best_bid_price = top_of_book.bid_price,
           .best_ask_price = top_of_book.ask_price,
-          .position = position,
-          .realized_profit = realized_profit,
-          .unrealized_profit = unrealized_profit,
-          .average_cost_price = average_cost_price,
-          .mark_price = mark_price,
           .buy_volume = buy_volume,
           .sell_volume = sell_volume,
-          .total_volume = total_volume,
+          .position = position,
+          .average_price = average_price,
+          .mark_price = mark_price,
+          .unrealized_profit = unrealized_profit,
+          .realized_profit = realized_profit,
       };
     }
   }
