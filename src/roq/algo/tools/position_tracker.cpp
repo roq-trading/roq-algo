@@ -18,13 +18,13 @@ namespace tools {
 
 std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_price, double multiplier) const {
   auto tmp_1 = mark_price * position_ - cost_;
-  auto unrealized = std::isnan(tmp_1) ? 0.0 : tmp_1;
+  auto unrealized_profit = std::isnan(tmp_1) ? 0.0 : tmp_1;
   auto tmp_2 = cost_ / position_;
-  auto average_price = std::isfinite(tmp_2) ? tmp_2 : NaN;
+  auto average_cost_price = std::isfinite(tmp_2) ? tmp_2 : NaN;
   return {
-      realized_,
-      unrealized,
-      average_price,
+      realized_profit_,
+      unrealized_profit,
+      average_cost_price,
   };
 }
 
@@ -50,7 +50,7 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
             auto position = position_ + item.quantity;
             if (utils::compare(position_, 0.0) < 0 && utils::compare(position, 0.0) >= 0) {  // note! close short
               cost_ -= position_ * item.price;
-              realized_ -= cost_;
+              realized_profit_ -= cost_;
               cost_ = position * item.price;
             } else {
               cost_ += item.quantity * item.price;
@@ -63,7 +63,7 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
             auto position = position_ - item.quantity;
             if (utils::compare(position_, 0.0) > 0 && utils::compare(position, 0.0) <= 0) {  // note! close long
               cost_ -= position_ * item.price;
-              realized_ -= cost_;
+              realized_profit_ -= cost_;
               cost_ = position * item.price;
             } else {
               cost_ -= item.quantity * item.price;

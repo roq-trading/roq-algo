@@ -140,7 +140,7 @@ struct Implementation final : public Handler {
       double position = NaN;
       double realized_profit = NaN;
       double unrealized_profit = NaN;
-      double average_price = NaN;
+      double average_cost_price = NaN;
       double mark_price = NaN;
       double buy_volume = NaN;
       double sell_volume = NaN;
@@ -202,7 +202,7 @@ struct Implementation final : public Handler {
             print_helper(12, "position"sv, history.position);
             print_helper(12, "realized_profit"sv, history.realized_profit);
             print_helper(12, "unrealized_profit"sv, history.unrealized_profit);
-            print_helper(12, "average_price"sv, history.average_price);
+            print_helper(12, "average_cost_price"sv, history.average_cost_price);
             print_helper(12, "mark_price"sv, history.mark_price);
             print_helper(12, "buy_volume"sv, history.buy_volume);
             print_helper(12, "sell_volume"sv, history.sell_volume);
@@ -383,7 +383,7 @@ struct Implementation final : public Handler {
       return top_of_book.ask_price;
     }();
     auto multiplier = 1.0;  // XXX FIXME TODO get from reference data
-    auto [realized_profit, unrealized_profit, average_price] = instrument.position_tracker.compute_pnl(mark_price, multiplier);
+    auto [realized_profit, unrealized_profit, average_cost_price] = instrument.position_tracker.compute_pnl(mark_price, multiplier);
     auto [buy_volume, sell_volume, total_volume] = instrument.position_tracker.current_volume();
     assert(sample_period_utc_.count());
     if (std::empty(instrument.history) || instrument.history[std::size(instrument.history) - 1].first != sample_period_utc_) {
@@ -393,7 +393,7 @@ struct Implementation final : public Handler {
           .position = position,
           .realized_profit = realized_profit,
           .unrealized_profit = unrealized_profit,
-          .average_price = average_price,
+          .average_cost_price = average_cost_price,
           .mark_price = mark_price,
           .buy_volume = buy_volume,
           .sell_volume = sell_volume,
@@ -408,7 +408,7 @@ struct Implementation final : public Handler {
           .position = position,
           .realized_profit = realized_profit,
           .unrealized_profit = unrealized_profit,
-          .average_price = average_price,
+          .average_cost_price = average_cost_price,
           .mark_price = mark_price,
           .buy_volume = buy_volume,
           .sell_volume = sell_volume,
