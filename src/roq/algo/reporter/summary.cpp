@@ -35,12 +35,6 @@ auto const DEFAULT_CONFIG = Summary::Config{
 // === HELPERS ===
 
 namespace {
-// TODO
-// -- first/last event receive time (utc)
-// -- fix min position
-// -- timer + event => bars (need frequency)
-// ---- price (close), profit, #orders, vol#orders, #fills, vol#fills
-// -- custom metrics
 
 struct Implementation final : public Handler {
   explicit Implementation(Summary::Config const &config) : market_data_source_{config.market_data_source}, sample_frequency_{config.sample_frequency} {}
@@ -154,7 +148,7 @@ struct Implementation final : public Handler {
       double traded_quantity = NaN;
       double average_price = NaN;
     };
-    // utils::unordered_map<uint64_t, std::vector<
+    // XXX FIXME TODO utils::unordered_map<uint64_t, ...
   };
 
   // reporter
