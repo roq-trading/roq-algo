@@ -97,13 +97,13 @@ void Simple::operator()(Event<Timer> const &event) {
 void Simple::operator()(Event<Connected> const &event) {
   check(event);
   auto &[message_info, connected] = event;
-  log::warn("[{}:{}] connected"sv, message_info.source, message_info.source_name);
+  log::info("[{}:{}] connected"sv, message_info.source, message_info.source_name);
 }
 
 void Simple::operator()(Event<Disconnected> const &event) {
   check(event);
   auto &[message_info, disconnected] = event;
-  log::warn("[{}:{}] disconnected"sv, message_info.source, message_info.source_name);
+  log::info("[{}:{}] disconnected"sv, message_info.source, message_info.source_name);
   auto &source = sources_[message_info.source];
   source.ready = false;
   for (auto &[name, account] : source.accounts)
@@ -124,7 +124,7 @@ void Simple::operator()(Event<DownloadEnd> const &event) {
 void Simple::operator()(Event<Ready> const &event) {
   check(event);
   auto &[message_info, ready] = event;
-  log::warn("[{}:{}] ready"sv, message_info.source, message_info.source_name);
+  log::info("[{}:{}] ready"sv, message_info.source, message_info.source_name);
   auto &source = sources_[message_info.source];
   source.ready = true;
   for (auto &[name, account] : source.accounts)
