@@ -4,19 +4,17 @@
 
 #include "roq/compat.hpp"
 
-#include <span>
-
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
-#include "roq/algo/strategy/leg.hpp"
+#include "roq/algo/leg.hpp"
 
 namespace roq {
 namespace algo {
 namespace strategy {
 
 struct ROQ_PUBLIC Config final {
-  std::span<strategy::Leg const> legs;
+  std::span<Leg const> legs;
   uint32_t strategy_id = {};
 };
 

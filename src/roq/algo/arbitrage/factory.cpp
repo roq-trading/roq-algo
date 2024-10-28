@@ -130,13 +130,13 @@ auto parameters_from_string(auto &parameters) {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<strategy::Handler> Factory::create(
-    strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, Parameters const &parameters) {
+std::unique_ptr<Strategy> Factory::create(
+    Strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, Parameters const &parameters) {
   return std::make_unique<Simple>(dispatcher, order_cache, config, parameters);
 }
 
-std::unique_ptr<strategy::Handler> Factory::create(
-    strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, std::string_view const &parameters) {
+std::unique_ptr<Strategy> Factory::create(
+    Strategy::Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config const &config, std::string_view const &parameters) {
   auto parameters_2 = parameters_from_string(parameters);
   log::debug("parameters={}"sv, parameters_2);
   return create(dispatcher, order_cache, config, parameters_2);

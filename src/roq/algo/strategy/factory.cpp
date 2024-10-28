@@ -14,8 +14,8 @@ namespace strategy {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<strategy::Handler> Factory::create(
-    Type type, strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, std::string_view const &parameters) {
+std::unique_ptr<Strategy> Factory::create(
+    Type type, Strategy::Dispatcher &dispatcher, OrderCache &order_cache, Config const &config, std::string_view const &parameters) {
   switch (type) {
     using enum Type;
     case UNDEFINED:

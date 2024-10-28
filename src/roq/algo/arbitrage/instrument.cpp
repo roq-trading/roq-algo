@@ -20,7 +20,7 @@ auto create_time_in_force(auto time_in_force) {
 
 // === IMPLEMENTATION ===
 
-Instrument::Instrument(strategy::Leg const &leg, MarketDataSource market_data_source)
+Instrument::Instrument(Leg const &leg, MarketDataSource market_data_source)
     : source{leg.source}, exchange{leg.exchange}, symbol{leg.symbol}, account{leg.account}, position_effect{leg.position_effect}, margin_mode{leg.margin_mode},
       time_in_force{create_time_in_force(leg.time_in_force)}, market_data_{exchange, symbol, market_data_source} {
 }

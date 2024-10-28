@@ -2,23 +2,18 @@
 
 #pragma once
 
-#include "roq/compat.hpp"
-
 #include <memory>
 
-#include "roq/algo/reporter/handler.hpp"
+#include "roq/algo/reporter.hpp"
+
+#include "roq/algo/reporter/type.hpp"
 
 namespace roq {
 namespace algo {
 namespace reporter {
 
-struct ROQ_PUBLIC Factory final {
-  enum class Type {
-    NONE,
-    SUMMARY,
-  };
-
-  static std::unique_ptr<Handler> create(Type);
+struct Factory final {
+  static std::unique_ptr<Reporter> create(Type);
 };
 
 }  // namespace reporter

@@ -8,32 +8,28 @@
 
 #include <fmt/core.h>
 
-#include "roq/margin_mode.hpp"
-#include "roq/position_effect.hpp"
-#include "roq/time_in_force.hpp"
+#include "roq/api.hpp"
 
 namespace roq {
 namespace algo {
-namespace strategy {
 
 struct ROQ_PUBLIC Leg final {
   uint8_t source = {};
-  std::string_view account;
-  std::string_view exchange;
-  std::string_view symbol;
+  Account account;
+  Exchange exchange;
+  Symbol symbol;
   PositionEffect position_effect = {};
   MarginMode margin_mode = {};
   TimeInForce time_in_force = {};
 };
 
-}  // namespace strategy
 }  // namespace algo
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::strategy::Leg> {
+struct fmt::formatter<roq::algo::Leg> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::strategy::Leg const &value, format_context &context) const {
+  auto format(roq::algo::Leg const &value, format_context &context) const {
     using namespace std::literals;
     return fmt::format_to(
         context.out(),
@@ -44,7 +40,7 @@ struct fmt::formatter<roq::algo::strategy::Leg> {
         R"(symbol="{}", )"
         R"(position_effect={}, )"
         R"(margin_mode={}, )"
-        R"(time_in_force={}, )"
+        R"(time_in_force={})"
         R"(}})"sv,
         value.source,
         value.account,

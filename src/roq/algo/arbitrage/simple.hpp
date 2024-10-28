@@ -11,9 +11,7 @@
 
 #include "roq/algo/tools/time_checker.hpp"
 
-#include "roq/algo/strategy/config.hpp"
-#include "roq/algo/strategy/dispatcher.hpp"
-#include "roq/algo/strategy/handler.hpp"
+#include "roq/algo/strategy.hpp"
 
 #include "roq/algo/arbitrage/instrument.hpp"
 #include "roq/algo/arbitrage/parameters.hpp"
@@ -38,9 +36,7 @@ namespace arbitrage {
 // - multiplier (compare real size)
 // - threshold
 
-struct Simple final : public strategy::Handler {
-  using Dispatcher = strategy::Dispatcher;
-
+struct Simple final : public Strategy {
   Simple(Dispatcher &, OrderCache &, strategy::Config const &, Parameters const &);
 
   Simple(Simple &&) = delete;

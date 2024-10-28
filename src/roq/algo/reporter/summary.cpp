@@ -36,7 +36,7 @@ auto const DEFAULT_CONFIG = Summary::Config{
 
 namespace {
 
-struct Implementation final : public Handler {
+struct Implementation final : public Reporter {
   explicit Implementation(Summary::Config const &config) : market_data_source_{config.market_data_source}, sample_frequency_{config.sample_frequency} {}
 
  protected:
@@ -499,11 +499,11 @@ struct Implementation final : public Handler {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<Handler> Summary::create() {
+std::unique_ptr<Reporter> Summary::create() {
   return create(DEFAULT_CONFIG);
 }
 
-std::unique_ptr<Handler> Summary::create(Config const &config) {
+std::unique_ptr<Reporter> Summary::create(Config const &config) {
   return std::make_unique<Implementation>(config);
 }
 

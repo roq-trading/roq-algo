@@ -15,7 +15,7 @@ namespace reporter {
 // === HELPERS ===
 
 namespace {
-struct None final : public Handler {
+struct None final : public Reporter {
   virtual void print(OutputType, std::string_view const &) const override {}
   virtual void write(std::string_view const &, OutputType, std::string_view const &) const override {}
 };
@@ -23,9 +23,9 @@ struct None final : public Handler {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<Handler> Factory::create(Type type) {
+std::unique_ptr<Reporter> Factory::create(Type type) {
   switch (type) {
-    using enum Factory::Type;
+    using enum Type;
     case NONE:
       return std::make_unique<None>();
     case SUMMARY:
