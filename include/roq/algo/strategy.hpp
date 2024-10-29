@@ -10,12 +10,6 @@
 
 #include "roq/cache/order.hpp"
 
-#include "roq/algo/leg.hpp"
-#include "roq/algo/order_cache.hpp"
-
-#include "roq/algo/strategy/config.hpp"
-#include "roq/algo/strategy/type.hpp"
-
 namespace roq {
 namespace algo {
 
@@ -30,8 +24,6 @@ struct ROQ_PUBLIC Strategy {
     virtual void send(CustomMetrics const &, uint8_t source) = 0;
     virtual void send(CustomMatrix const &, uint8_t source) = 0;
   };
-
-  static std::unique_ptr<Strategy> create(strategy::Type, Dispatcher &, OrderCache &, strategy::Config const &, std::string_view const &parameters);
 
   virtual ~Strategy() {}
 

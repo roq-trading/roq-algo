@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "roq/compat.hpp"
+
 #include <memory>
 
 #include "roq/algo/reporter.hpp"
@@ -12,8 +14,8 @@ namespace roq {
 namespace algo {
 namespace reporter {
 
-struct Factory final {
-  static std::unique_ptr<Reporter> create(Type);
+struct ROQ_PUBLIC Factory final {
+  static std::unique_ptr<Reporter> create(Type = {});
 };
 
 }  // namespace reporter

@@ -10,6 +10,7 @@
 #include "roq/algo/order_cache.hpp"
 #include "roq/algo/strategy.hpp"
 
+#include "roq/algo/strategy/config.hpp"
 #include "roq/algo/strategy/meta.hpp"
 
 #include "roq/algo/arbitrage/parameters.hpp"

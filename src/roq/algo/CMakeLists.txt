@@ -6,7 +6,7 @@ add_subdirectory(tools)
 
 set(TARGET_NAME ${PROJECT_NAME})
 
-set(SOURCES reporter.cpp strategy.cpp main.cpp)
+set(SOURCES main.cpp)
 
 add_library(${TARGET_NAME} SHARED ${SOURCES})
 
