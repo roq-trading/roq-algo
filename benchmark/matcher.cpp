@@ -11,7 +11,7 @@ using namespace roq::algo::matcher;
 using namespace std::literals;
 
 void BM_tools_Simple_add(benchmark::State &state) {
-  struct MyDispatcher final : public Dispatcher {
+  struct MyDispatcher final : public Matcher::Dispatcher {
     void operator()(Event<ReferenceData> const &) override {}
     void operator()(Event<MarketStatus> const &) override {}
     void operator()(Event<TopOfBook> const &) override {}
@@ -33,7 +33,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
   for (auto _ : state) {
-    auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, order_cache);
+    auto matcher = Factory::create(Type::SIMPLE, dispatcher, config, order_cache);
   }
 }
 

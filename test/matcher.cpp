@@ -11,7 +11,7 @@ using namespace roq::algo::matcher;
 using namespace std::literals;
 
 TEST_CASE("simple", "[algo/matcher]") {
-  struct MyDispatcher final : public Dispatcher {
+  struct MyDispatcher final : public Matcher::Dispatcher {
     void operator()(Event<ReferenceData> const &) override {}
     void operator()(Event<MarketStatus> const &) override {}
     void operator()(Event<TopOfBook> const &) override {}
@@ -32,6 +32,6 @@ TEST_CASE("simple", "[algo/matcher]") {
       .symbol = "BTC-PERPETUAL"sv,
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
-  auto matcher = Factory::create(Factory::Type::SIMPLE, dispatcher, config, order_cache);
+  auto matcher = Factory::create(Type::SIMPLE, dispatcher, config, order_cache);
   CHECK((1 + 1) == 2);
 }

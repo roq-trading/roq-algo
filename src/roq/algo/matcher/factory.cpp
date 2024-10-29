@@ -14,9 +14,9 @@ namespace matcher {
 
 // === IMPLEMENTATION ===
 
-std::unique_ptr<Handler> Factory::create(Type type, Dispatcher &dispatcher, Config const &config, OrderCache &order_cache) {
+std::unique_ptr<Matcher> Factory::create(Type type, Matcher::Dispatcher &dispatcher, Config const &config, OrderCache &order_cache) {
   switch (type) {
-    using enum Factory::Type;
+    using enum Type;
     case SIMPLE:
       return std::make_unique<Simple>(dispatcher, config, order_cache);
   }

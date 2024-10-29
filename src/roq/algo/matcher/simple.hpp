@@ -11,9 +11,9 @@
 #include "roq/algo/tools/market_data.hpp"
 #include "roq/algo/tools/time_checker.hpp"
 
+#include "roq/algo/matcher.hpp"
+
 #include "roq/algo/matcher/config.hpp"
-#include "roq/algo/matcher/dispatcher.hpp"
-#include "roq/algo/matcher/handler.hpp"
 
 namespace roq {
 namespace algo {
@@ -31,7 +31,9 @@ namespace matcher {
 // supports
 // - limit orders
 
-struct Simple final : public Handler {
+struct Simple final : public Matcher {
+  using Dispatcher = Matcher::Dispatcher;
+
   Simple(Dispatcher &, Config const &, OrderCache &);
 
   Simple(Simple const &) = delete;

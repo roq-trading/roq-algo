@@ -6,22 +6,18 @@
 
 #include <memory>
 
+#include "roq/algo/matcher.hpp"
 #include "roq/algo/order_cache.hpp"
 
 #include "roq/algo/matcher/config.hpp"
-#include "roq/algo/matcher/dispatcher.hpp"
-#include "roq/algo/matcher/handler.hpp"
+#include "roq/algo/matcher/type.hpp"
 
 namespace roq {
 namespace algo {
 namespace matcher {
 
 struct ROQ_PUBLIC Factory final {
-  enum class Type {
-    SIMPLE,
-  };
-
-  static std::unique_ptr<Handler> create(Type, Dispatcher &, Config const &, OrderCache &);
+  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, Config const &, OrderCache &);
 };
 
 }  // namespace matcher
