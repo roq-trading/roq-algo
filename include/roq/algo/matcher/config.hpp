@@ -13,6 +13,7 @@ namespace algo {
 namespace matcher {
 
 struct ROQ_PUBLIC Config final {
+  uint8_t source = {};
   std::string_view exchange;
   std::string_view symbol;
   MarketDataSource market_data_source = {};
@@ -30,10 +31,12 @@ struct fmt::formatter<roq::algo::matcher::Config> {
     return fmt::format_to(
         context.out(),
         R"({{)"
+        R"(source={}, )"
         R"(exchange="{}", )"
         R"(symbol="{}", )"
         R"(market_data_source={})"
         R"(}})"sv,
+        value.source,
         value.exchange,
         value.symbol,
         value.market_data_source);
