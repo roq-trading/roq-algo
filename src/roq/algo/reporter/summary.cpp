@@ -9,6 +9,7 @@
 
 #include "roq/utils/common.hpp"
 #include "roq/utils/compare.hpp"
+#include "roq/utils/safe_cast.hpp"
 #include "roq/utils/update.hpp"
 
 #include "roq/utils/container.hpp"
@@ -152,6 +153,54 @@ struct Implementation final : public Reporter {
   };
 
   // reporter
+
+  std::span<std::string_view const> get_labels() const override { return {}; }
+
+  void dispatch(Handler &handler, std::string_view const &label) const override {
+    std::vector<Reporter::Key> index;
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[sample_period_utc, _] : instrument.history) {
+            auto key = Reporter::Key{
+                .source = utils::safe_cast{source},
+                .account = {},
+                .exchange = exchange,
+                .symbol = symbol,
+                .timestamp_utc = sample_period_utc,
+            };
+            index.emplace_back(std::move(key));
+          }
+        }
+      }
+    }
+    handler(index);
+    std::vector<double> tmp;
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[sample_period_utc, sample] : instrument.history) {
+            tmp.emplace_back(sample.best_bid_price);
+          }
+        }
+      }
+    }
+    handler("best_bid_price"sv, tmp);
+    tmp.clear();
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[sample_period_utc, sample] : instrument.history) {
+            tmp.emplace_back(sample.best_ask_price);
+          }
+        }
+      }
+    }
+    handler("best_ask_price"sv, tmp);
+  }
 
   void print(OutputType output_type, std::string_view const &label) const override {
     switch (output_type) {
