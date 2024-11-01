@@ -17,7 +17,7 @@ namespace algo {
 namespace matcher {
 
 struct ROQ_PUBLIC Factory final {
-  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, Config const &, OrderCache &);
+  static std::unique_ptr<Matcher> create(Type, Matcher::Dispatcher &, OrderCache &, Config const &);
 };
 
 }  // namespace matcher

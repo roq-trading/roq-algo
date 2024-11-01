@@ -14,6 +14,7 @@
 #include "roq/algo/reporter.hpp"
 
 #include "roq/algo/matcher.hpp"
+#include "roq/algo/matcher/config.hpp"
 
 namespace roq {
 namespace algo {
@@ -21,8 +22,7 @@ namespace algo {
 struct ROQ_PUBLIC Factory {
   virtual std::unique_ptr<algo::Strategy> create_strategy(algo::Strategy::Dispatcher &, algo::OrderCache &, algo::strategy::Config const &) const = 0;
   virtual std::unique_ptr<algo::Reporter> create_reporter() const = 0;
-  virtual std::unique_ptr<algo::Matcher> create_matcher(
-      algo::Matcher::Dispatcher &, algo::OrderCache &, uint8_t source_id, std::string_view const &exchange, std::string_view const &symbol) const = 0;
+  virtual std::unique_ptr<algo::Matcher> create_matcher(algo::Matcher::Dispatcher &, algo::OrderCache &, algo::matcher::Config const &) const = 0;
 };
 
 }  // namespace algo

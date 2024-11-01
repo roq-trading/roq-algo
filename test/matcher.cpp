@@ -32,6 +32,6 @@ TEST_CASE("simple", "[algo/matcher]") {
       .symbol = "BTC-PERPETUAL"sv,
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
-  auto matcher = Factory::create(Type::SIMPLE, dispatcher, config, order_cache);
+  auto matcher = Factory::create(Type::SIMPLE, dispatcher, order_cache, config);
   CHECK((1 + 1) == 2);
 }

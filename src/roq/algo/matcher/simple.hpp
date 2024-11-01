@@ -34,7 +34,7 @@ namespace matcher {
 struct Simple final : public Matcher {
   using Dispatcher = Matcher::Dispatcher;
 
-  Simple(Dispatcher &, Config const &, OrderCache &);
+  Simple(Dispatcher &, OrderCache &, Config const &);
 
   Simple(Simple const &) = delete;
 
@@ -83,8 +83,8 @@ struct Simple final : public Matcher {
 
  private:
   Dispatcher &dispatcher_;
-  MarketDataSource const market_data_source_;
   OrderCache &order_cache_;
+  MarketDataSource const market_data_source_;
   tools::MarketData market_data_;
   // note! internal (integer) is in units of tick_size, external (floating point) is the real price
   struct {

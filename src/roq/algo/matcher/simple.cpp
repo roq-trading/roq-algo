@@ -71,8 +71,8 @@ void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cac
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Dispatcher &dispatcher, Config const &config, OrderCache &order_cache)
-    : dispatcher_{dispatcher}, market_data_source_{config.market_data_source}, order_cache_{order_cache},
+Simple::Simple(Dispatcher &dispatcher, OrderCache &order_cache, Config const &config)
+    : dispatcher_{dispatcher}, order_cache_{order_cache}, market_data_source_{config.market_data_source},
       market_data_{config.exchange, config.symbol, market_data_source_} {
 }
 
