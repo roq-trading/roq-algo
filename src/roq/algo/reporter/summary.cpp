@@ -157,49 +157,46 @@ struct Implementation final : public Reporter {
   std::span<std::string_view const> get_labels() const override { return {}; }
 
   void dispatch(Handler &handler, std::string_view const &label) const override {
-    std::vector<Reporter::Key> index;
-    for (size_t source = 0; source < std::size(instruments_); ++source) {
-      auto &tmp_1 = instruments_[source];
-      for (auto &[exchange, tmp_2] : tmp_1) {
-        for (auto &[symbol, instrument] : tmp_2) {
-          for (auto &[sample_period_utc, _] : instrument.history) {
-            auto key = Reporter::Key{
-                .source = utils::safe_cast{source},
-                .account = {},
-                .exchange = exchange,
-                .symbol = symbol,
-                .timestamp_utc = sample_period_utc,
-            };
-            index.emplace_back(std::move(key));
-          }
-        }
-      }
-    }
-    handler(index);
-    std::vector<double> tmp;
+    std::vector<uint8_t> source_2;  // note!
+    std::vector<std::string_view> exchange_2, symbol_2;
+    std::vector<std::chrono::nanoseconds> sample_period_utc_2;
+    std::vector<double> best_bid_price, best_ask_price, buy_volume, sell_volume, position, average_price, mark_price, unrealized_profit, realized_profit;
+    ;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
         for (auto &[symbol, instrument] : tmp_2) {
           for (auto &[sample_period_utc, sample] : instrument.history) {
-            tmp.emplace_back(sample.best_bid_price);
+            source_2.emplace_back(source);
+            exchange_2.emplace_back(exchange);
+            symbol_2.emplace_back(symbol);
+            sample_period_utc_2.emplace_back(sample_period_utc);
+            best_bid_price.emplace_back(sample.best_bid_price);
+            best_ask_price.emplace_back(sample.best_ask_price);
+            buy_volume.emplace_back(sample.buy_volume);
+            sell_volume.emplace_back(sample.sell_volume);
+            position.emplace_back(sample.position);
+            average_price.emplace_back(sample.average_price);
+            mark_price.emplace_back(sample.mark_price);
+            unrealized_profit.emplace_back(sample.unrealized_profit);
+            realized_profit.emplace_back(sample.realized_profit);
           }
         }
       }
     }
-    handler("best_bid_price"sv, tmp);
-    tmp.clear();
-    for (size_t source = 0; source < std::size(instruments_); ++source) {
-      auto &tmp_1 = instruments_[source];
-      for (auto &[exchange, tmp_2] : tmp_1) {
-        for (auto &[symbol, instrument] : tmp_2) {
-          for (auto &[sample_period_utc, sample] : instrument.history) {
-            tmp.emplace_back(sample.best_ask_price);
-          }
-        }
-      }
-    }
-    handler("best_ask_price"sv, tmp);
+    handler("source"sv, roq::algo::Reporter::Type::INDEX, source_2);
+    handler("exchange"sv, roq::algo::Reporter::Type::INDEX, exchange_2);
+    handler("symbol"sv, roq::algo::Reporter::Type::INDEX, symbol_2);
+    handler("sample_period_utc"sv, roq::algo::Reporter::Type::INDEX, sample_period_utc_2);
+    handler("best_bid_price"sv, roq::algo::Reporter::Type::DATA, best_bid_price);
+    handler("best_ask_price"sv, roq::algo::Reporter::Type::DATA, best_ask_price);
+    handler("buy_volume"sv, roq::algo::Reporter::Type::DATA, buy_volume);
+    handler("sell_volume"sv, roq::algo::Reporter::Type::DATA, sell_volume);
+    handler("position"sv, roq::algo::Reporter::Type::DATA, position);
+    handler("average_price"sv, roq::algo::Reporter::Type::DATA, average_price);
+    handler("mark_price"sv, roq::algo::Reporter::Type::DATA, mark_price);
+    handler("unrealized_profit"sv, roq::algo::Reporter::Type::DATA, unrealized_profit);
+    handler("realized_profit"sv, roq::algo::Reporter::Type::DATA, realized_profit);
   }
 
   void print(OutputType output_type, std::string_view const &label) const override {
