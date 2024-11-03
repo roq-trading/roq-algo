@@ -63,7 +63,7 @@ struct Simple final : public Matcher {
   template <typename T>
   void dispatch_order_ack(Event<T> const &, cache::Order const &, Error, RequestStatus = {});
 
-  void dispatch_order_update(MessageInfo const &, cache::Order const &);
+  void dispatch_order_update(MessageInfo const &, cache::Order &);
 
   void dispatch_trade_update(MessageInfo const &, cache::Order const &, Fill const &);
 

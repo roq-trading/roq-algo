@@ -171,6 +171,8 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
           .commission_quantity = NaN,
           .commission_currency = {},
       };
+      order.create_time_utc = market_data_.exchange_time_utc();
+      order.update_time_utc = market_data_.exchange_time_utc();
       order.order_status = OrderStatus::COMPLETED;
       order.remaining_quantity = 0.0;
       order.traded_quantity = fill.quantity;
@@ -182,6 +184,8 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
       dispatch_trade_update(message_info, order, fill);
     } else {
       add_order(order.order_id, order.side, price);
+      order.create_time_utc = market_data_.exchange_time_utc();
+      order.update_time_utc = market_data_.exchange_time_utc();
       order.order_status = OrderStatus::WORKING;
       order.remaining_quantity = create_order.quantity;
       order.traded_quantity = 0.0;
@@ -209,6 +213,7 @@ void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
     if (remove_order(order.order_id, order.side, price)) {
+      order.update_time_utc = market_data_.exchange_time_utc();
       order.order_status = OrderStatus::CANCELED;
       dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
     } else {
@@ -249,6 +254,7 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
         .commission_quantity = NaN,
         .commission_currency = {},
     };
+    order.update_time_utc = market_data_.exchange_time_utc();
     order.order_status = OrderStatus::COMPLETED;
     order.remaining_quantity = 0.0;
     order.traded_quantity = fill.quantity;
@@ -321,8 +327,12 @@ void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order
   create_event_and_dispatch(dispatcher_, message_info, order_ack);
 }
 
-void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order const &order) {
+void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order &order) {
+  if (!order.create_time_utc.count())
+    order.create_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy create time (not exchange time)
+  order.update_time_utc = market_data_.exchange_time_utc();    // XXX FIXME TODO this is strategy receive time (not exchange time)
   auto order_update = static_cast<OrderUpdate>(order);
+  order_update.sending_time_utc = market_data_.exchange_time_utc();
   order_update.update_type = UpdateType::INCREMENTAL;
   create_event_and_dispatch(dispatcher_, message_info, order_update);
 }
@@ -337,8 +347,8 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order
       .position_effect = order.position_effect,
       .margin_mode = order.margin_mode,
       .quantity_type = order.quantity_type,
-      .create_time_utc = message_info.receive_time_utc,
-      .update_time_utc = message_info.receive_time_utc,
+      .create_time_utc = market_data_.exchange_time_utc(),  // XXX FIXME TODO this is strategy receive time (not exchange time)
+      .update_time_utc = market_data_.exchange_time_utc(),  // XXX FIXME TODO this is strategy receive time (not exchange time)
       .external_account = {},
       .external_order_id = {},
       .client_order_id = {},

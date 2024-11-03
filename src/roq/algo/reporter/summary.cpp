@@ -63,8 +63,14 @@ struct Implementation final : public Reporter {
           .order_id = order_update.order_id,
           .side = order_update.side,
           .create_time_utc = order_update.create_time_utc,
+          .update_time_utc = order_update.update_time_utc,
+          .order_status = order_update.order_status,
           .quantity = order_update.quantity,
           .price = order_update.price,
+          .remaining_quantity = order_update.remaining_quantity,
+          .traded_quantity = order_update.traded_quantity,
+          .average_traded_price = order_update.average_traded_price,
+          .sending_time_utc = order_update.sending_time_utc,
       };
       orders[std::string{order_update.account}].emplace_back(std::move(order));
       return true;
@@ -95,6 +101,8 @@ struct Implementation final : public Reporter {
         auto fill_2 = Fill{
             .order_id = trade_update_2.order_id,
             .side = trade_update_2.side,
+            .create_time_utc = trade_update_2.create_time_utc,
+            .update_time_utc = trade_update_2.update_time_utc,
             .exchange_time_utc = fill.exchange_time_utc,
             .external_trade_id = std::string{fill.external_trade_id},
             .quantity = fill.quantity,
@@ -184,14 +192,22 @@ struct Implementation final : public Reporter {
       uint64_t order_id = {};
       Side side = {};
       std::chrono::nanoseconds create_time_utc = {};
+      std::chrono::nanoseconds update_time_utc = {};
+      OrderStatus order_status = {};
       double quantity = NaN;
       double price = NaN;
+      double remaining_quantity = NaN;
+      double traded_quantity = NaN;
+      double average_traded_price = NaN;
+      std::chrono::nanoseconds sending_time_utc = {};
     };
     std::unordered_map<std::string, std::vector<Order>> orders;  // by account
     // trades
     struct Fill final {
       uint64_t order_id = {};
       Side side = {};
+      std::chrono::nanoseconds create_time_utc = {};
+      std::chrono::nanoseconds update_time_utc = {};
       std::chrono::nanoseconds exchange_time_utc = {};
       std::string external_trade_id;
       double quantity = NaN;
@@ -207,31 +223,30 @@ struct Implementation final : public Reporter {
 
   void dispatch(Handler &handler, std::string_view const &label) const override {
     enum class Label {
-      SAMPLES,
-      ORDERS,
-      TRADES,
+      SAMPLE_HISTORY,
+      ORDER_UPDATE,
+      TRADE_UPDATE,
     };
     auto label_2 = parse_enum<Label>(label);
     switch (label_2) {
       using enum Label;
-      case SAMPLES:
-        dispatch_samples(handler);
+      case SAMPLE_HISTORY:
+        dispatch_sample_history(handler);
         break;
-      case ORDERS:
-        dispatch_orders(handler);
+      case ORDER_UPDATE:
+        dispatch_order_update(handler);
         break;
-      case TRADES:
-        dispatch_trades(handler);
+      case TRADE_UPDATE:
+        dispatch_trade_update(handler);
         break;
     }
   }
 
-  void dispatch_samples(Handler &handler) const {
+  void dispatch_sample_history(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<std::string_view> exchange_2, symbol_2;
     std::vector<std::chrono::nanoseconds> sample_period_utc_2;
     std::vector<double> best_bid_price, best_ask_price, buy_volume, sell_volume, position, average_price, mark_price, unrealized_profit, realized_profit;
-    ;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
@@ -269,12 +284,12 @@ struct Implementation final : public Reporter {
     handler("realized_profit"sv, roq::algo::Reporter::Type::DATA, realized_profit);
   }
 
-  void dispatch_orders(Handler &handler) const {
+  void dispatch_order_update(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<uint64_t> order_id_2;
-    std::vector<std::string_view> exchange_2, symbol_2, account_2, side;
-    std::vector<std::chrono::nanoseconds> create_time_utc;
-    std::vector<double> quantity, price;
+    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, order_status;
+    std::vector<std::chrono::nanoseconds> create_time_utc, update_time_utc, sending_time_utc;
+    std::vector<double> quantity, price, remaining_quantity, traded_quantity, average_traded_price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
@@ -288,8 +303,14 @@ struct Implementation final : public Reporter {
               order_id_2.emplace_back(order.order_id);
               side.emplace_back(magic_enum::enum_name(order.side));
               create_time_utc.emplace_back(order.create_time_utc);
+              update_time_utc.emplace_back(order.update_time_utc);
+              order_status.emplace_back(magic_enum::enum_name(order.order_status));
               quantity.emplace_back(order.quantity);
               price.emplace_back(order.price);
+              remaining_quantity.emplace_back(order.remaining_quantity);
+              traded_quantity.emplace_back(order.traded_quantity);
+              average_traded_price.emplace_back(order.average_traded_price);
+              sending_time_utc.emplace_back(order.sending_time_utc);
             }
           }
         }
@@ -301,16 +322,22 @@ struct Implementation final : public Reporter {
     handler("account"sv, roq::algo::Reporter::Type::INDEX, account_2);
     handler("order_id"sv, roq::algo::Reporter::Type::INDEX, order_id_2);
     handler("side"sv, roq::algo::Reporter::Type::DATA, side);
-    handler("create_time_utc"sv, roq::algo::Reporter::Type::INDEX, create_time_utc);
+    handler("create_time_utc"sv, roq::algo::Reporter::Type::DATA, create_time_utc);
+    handler("update_time_utc"sv, roq::algo::Reporter::Type::DATA, update_time_utc);
+    handler("order_status"sv, roq::algo::Reporter::Type::DATA, order_status);
     handler("quantity"sv, roq::algo::Reporter::Type::DATA, quantity);
     handler("price"sv, roq::algo::Reporter::Type::DATA, price);
+    handler("remaining_quantity"sv, roq::algo::Reporter::Type::DATA, remaining_quantity);
+    handler("traded_quantity"sv, roq::algo::Reporter::Type::DATA, traded_quantity);
+    handler("average_traded_price"sv, roq::algo::Reporter::Type::DATA, average_traded_price);
+    handler("sending_time_utc"sv, roq::algo::Reporter::Type::INDEX, sending_time_utc);
   }
 
-  void dispatch_trades(Handler &handler) const {
+  void dispatch_trade_update(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<uint64_t> order_id;
     std::vector<std::string_view> exchange_2, symbol_2, account_2, side, external_trade_id, liquidity;
-    std::vector<std::chrono::nanoseconds> exchange_time_utc;
+    std::vector<std::chrono::nanoseconds> exchange_time_utc, create_time_utc, update_time_utc;
     std::vector<double> quantity, price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
@@ -324,6 +351,8 @@ struct Implementation final : public Reporter {
               account_2.emplace_back(account);
               order_id.emplace_back(fill.order_id);
               side.emplace_back(magic_enum::enum_name(fill.side));
+              create_time_utc.emplace_back(fill.create_time_utc);
+              update_time_utc.emplace_back(fill.update_time_utc);
               exchange_time_utc.emplace_back(fill.exchange_time_utc);
               external_trade_id.emplace_back(fill.external_trade_id);
               quantity.emplace_back(fill.quantity);
@@ -340,6 +369,8 @@ struct Implementation final : public Reporter {
     handler("account"sv, roq::algo::Reporter::Type::INDEX, account_2);
     handler("order_id"sv, roq::algo::Reporter::Type::INDEX, order_id);
     handler("side"sv, roq::algo::Reporter::Type::DATA, side);
+    handler("create_time_utc"sv, roq::algo::Reporter::Type::DATA, create_time_utc);
+    handler("update_time_utc"sv, roq::algo::Reporter::Type::DATA, update_time_utc);
     handler("exchange_time_utc"sv, roq::algo::Reporter::Type::INDEX, exchange_time_utc);
     handler("external_trade_id"sv, roq::algo::Reporter::Type::INDEX, external_trade_id);
     handler("quantity"sv, roq::algo::Reporter::Type::DATA, quantity);
