@@ -192,7 +192,6 @@ struct Implementation final : public Reporter {
     struct Fill final {
       uint64_t order_id = {};
       Side side = {};
-      std::string external_order_id;
       std::chrono::nanoseconds exchange_time_utc = {};
       std::string external_trade_id;
       double quantity = NaN;
@@ -310,7 +309,7 @@ struct Implementation final : public Reporter {
   void dispatch_trades(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<uint64_t> order_id;
-    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, external_order_id, external_trade_id, liquidity;
+    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, external_trade_id, liquidity;
     std::vector<std::chrono::nanoseconds> exchange_time_utc;
     std::vector<double> quantity, price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
@@ -325,7 +324,6 @@ struct Implementation final : public Reporter {
               account_2.emplace_back(account);
               order_id.emplace_back(fill.order_id);
               side.emplace_back(magic_enum::enum_name(fill.side));
-              external_order_id.emplace_back(fill.external_order_id);
               exchange_time_utc.emplace_back(fill.exchange_time_utc);
               external_trade_id.emplace_back(fill.external_trade_id);
               quantity.emplace_back(fill.quantity);
@@ -342,7 +340,6 @@ struct Implementation final : public Reporter {
     handler("account"sv, roq::algo::Reporter::Type::INDEX, account_2);
     handler("order_id"sv, roq::algo::Reporter::Type::INDEX, order_id);
     handler("side"sv, roq::algo::Reporter::Type::DATA, side);
-    handler("external_order_id"sv, roq::algo::Reporter::Type::DATA, external_order_id);
     handler("exchange_time_utc"sv, roq::algo::Reporter::Type::INDEX, exchange_time_utc);
     handler("external_trade_id"sv, roq::algo::Reporter::Type::INDEX, external_trade_id);
     handler("quantity"sv, roq::algo::Reporter::Type::DATA, quantity);
