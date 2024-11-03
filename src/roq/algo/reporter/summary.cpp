@@ -2,6 +2,10 @@
 
 #include "roq/algo/reporter/summary.hpp"
 
+#include <magic_enum.hpp>
+
+#include <nameof.hpp>
+
 #include <cassert>
 #include <vector>
 
@@ -36,6 +40,13 @@ auto const DEFAULT_CONFIG = Summary::Config{
 // === HELPERS ===
 
 namespace {
+template <typename T>
+auto parse_enum(auto &value) {
+  auto result = magic_enum::enum_cast<T>(value, magic_enum::case_insensitive);
+  if (!result.has_value())
+    log::fatal(R"(Unexpected: value="{}" ({}))"sv, value, nameof::nameof_full_type<T>());
+  return result.value();
+}
 
 struct Implementation final : public Reporter {
   explicit Implementation(Summary::Config const &config) : market_data_source_{config.market_data_source}, sample_frequency_{config.sample_frequency} {}
@@ -44,6 +55,20 @@ struct Implementation final : public Reporter {
   struct Instrument final {
     Instrument(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource market_data_source)
         : market_data{exchange, symbol, market_data_source} {}
+
+    bool operator()(Event<OrderUpdate> const &event) {
+      auto &[message_info, order_update] = event;
+      // orders
+      auto order = Order{
+          .order_id = order_update.order_id,
+          .side = order_update.side,
+          .create_time_utc = order_update.create_time_utc,
+          .quantity = order_update.quantity,
+          .price = order_update.price,
+      };
+      orders[std::string{order_update.account}].emplace_back(std::move(order));
+      return true;
+    }
 
     bool operator()(Event<TradeUpdate> const &event) {
       position_tracker(event);
@@ -66,6 +91,17 @@ struct Implementation final : public Reporter {
         }
         ++trade_update.fills.total_count;
         trade_update.fills.total_volume += fill.quantity;
+        // trades
+        auto fill_2 = Fill{
+            .order_id = trade_update_2.order_id,
+            .side = trade_update_2.side,
+            .exchange_time_utc = fill.exchange_time_utc,
+            .external_trade_id = std::string{fill.external_trade_id},
+            .quantity = fill.quantity,
+            .price = fill.price,
+            .liquidity = fill.liquidity,
+        };
+        fills[std::string{trade_update_2.account}].emplace_back(std::move(fill_2));
       }
       return true;
     }
@@ -145,11 +181,25 @@ struct Implementation final : public Reporter {
     std::vector<std::pair<std::chrono::nanoseconds, Sample>> history;
     // orders
     struct Order final {
+      uint64_t order_id = {};
       Side side = {};
-      double traded_quantity = NaN;
-      double average_price = NaN;
+      std::chrono::nanoseconds create_time_utc = {};
+      double quantity = NaN;
+      double price = NaN;
     };
-    // XXX FIXME TODO utils::unordered_map<uint64_t, ...
+    std::unordered_map<std::string, std::vector<Order>> orders;  // by account
+    // trades
+    struct Fill final {
+      uint64_t order_id = {};
+      Side side = {};
+      std::string external_order_id;
+      std::chrono::nanoseconds exchange_time_utc = {};
+      std::string external_trade_id;
+      double quantity = NaN;
+      double price = NaN;
+      Liquidity liquidity = {};
+    };
+    std::unordered_map<std::string, std::vector<Fill>> fills;  // by account
   };
 
   // reporter
@@ -157,7 +207,28 @@ struct Implementation final : public Reporter {
   std::span<std::string_view const> get_labels() const override { return {}; }
 
   void dispatch(Handler &handler, std::string_view const &label) const override {
-    std::vector<uint8_t> source_2;  // note!
+    enum class Label {
+      SAMPLES,
+      ORDERS,
+      TRADES,
+    };
+    auto label_2 = parse_enum<Label>(label);
+    switch (label_2) {
+      using enum Label;
+      case SAMPLES:
+        dispatch_samples(handler);
+        break;
+      case ORDERS:
+        dispatch_orders(handler);
+        break;
+      case TRADES:
+        dispatch_trades(handler);
+        break;
+    }
+  }
+
+  void dispatch_samples(Handler &handler) const {
+    std::vector<uint8_t> source_2;
     std::vector<std::string_view> exchange_2, symbol_2;
     std::vector<std::chrono::nanoseconds> sample_period_utc_2;
     std::vector<double> best_bid_price, best_ask_price, buy_volume, sell_volume, position, average_price, mark_price, unrealized_profit, realized_profit;
@@ -197,6 +268,86 @@ struct Implementation final : public Reporter {
     handler("mark_price"sv, roq::algo::Reporter::Type::DATA, mark_price);
     handler("unrealized_profit"sv, roq::algo::Reporter::Type::DATA, unrealized_profit);
     handler("realized_profit"sv, roq::algo::Reporter::Type::DATA, realized_profit);
+  }
+
+  void dispatch_orders(Handler &handler) const {
+    std::vector<uint8_t> source_2;
+    std::vector<uint64_t> order_id_2;
+    std::vector<std::string_view> exchange_2, symbol_2, account_2, side;
+    std::vector<std::chrono::nanoseconds> create_time_utc;
+    std::vector<double> quantity, price;
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[account, orders_2] : instrument.orders) {
+            for (auto &order : orders_2) {
+              source_2.emplace_back(source);
+              exchange_2.emplace_back(exchange);
+              symbol_2.emplace_back(symbol);
+              account_2.emplace_back(account);
+              order_id_2.emplace_back(order.order_id);
+              side.emplace_back(magic_enum::enum_name(order.side));
+              create_time_utc.emplace_back(order.create_time_utc);
+              quantity.emplace_back(order.quantity);
+              price.emplace_back(order.price);
+            }
+          }
+        }
+      }
+    }
+    handler("source"sv, roq::algo::Reporter::Type::INDEX, source_2);
+    handler("exchange"sv, roq::algo::Reporter::Type::INDEX, exchange_2);
+    handler("symbol"sv, roq::algo::Reporter::Type::INDEX, symbol_2);
+    handler("account"sv, roq::algo::Reporter::Type::INDEX, account_2);
+    handler("order_id"sv, roq::algo::Reporter::Type::INDEX, order_id_2);
+    handler("side"sv, roq::algo::Reporter::Type::DATA, side);
+    handler("create_time_utc"sv, roq::algo::Reporter::Type::INDEX, create_time_utc);
+    handler("quantity"sv, roq::algo::Reporter::Type::DATA, quantity);
+    handler("price"sv, roq::algo::Reporter::Type::DATA, price);
+  }
+
+  void dispatch_trades(Handler &handler) const {
+    std::vector<uint8_t> source_2;
+    std::vector<uint64_t> order_id;
+    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, external_order_id, external_trade_id, liquidity;
+    std::vector<std::chrono::nanoseconds> exchange_time_utc;
+    std::vector<double> quantity, price;
+    for (size_t source = 0; source < std::size(instruments_); ++source) {
+      auto &tmp_1 = instruments_[source];
+      for (auto &[exchange, tmp_2] : tmp_1) {
+        for (auto &[symbol, instrument] : tmp_2) {
+          for (auto &[account, fills] : instrument.fills) {
+            for (auto &fill : fills) {
+              source_2.emplace_back(source);
+              exchange_2.emplace_back(exchange);
+              symbol_2.emplace_back(symbol);
+              account_2.emplace_back(account);
+              order_id.emplace_back(fill.order_id);
+              side.emplace_back(magic_enum::enum_name(fill.side));
+              external_order_id.emplace_back(fill.external_order_id);
+              exchange_time_utc.emplace_back(fill.exchange_time_utc);
+              external_trade_id.emplace_back(fill.external_trade_id);
+              quantity.emplace_back(fill.quantity);
+              price.emplace_back(fill.price);
+              liquidity.emplace_back(magic_enum::enum_name(fill.liquidity));
+            }
+          }
+        }
+      }
+    }
+    handler("source"sv, roq::algo::Reporter::Type::INDEX, source_2);
+    handler("exchange"sv, roq::algo::Reporter::Type::INDEX, exchange_2);
+    handler("symbol"sv, roq::algo::Reporter::Type::INDEX, symbol_2);
+    handler("account"sv, roq::algo::Reporter::Type::INDEX, account_2);
+    handler("order_id"sv, roq::algo::Reporter::Type::INDEX, order_id);
+    handler("side"sv, roq::algo::Reporter::Type::DATA, side);
+    handler("external_order_id"sv, roq::algo::Reporter::Type::DATA, external_order_id);
+    handler("exchange_time_utc"sv, roq::algo::Reporter::Type::INDEX, exchange_time_utc);
+    handler("external_trade_id"sv, roq::algo::Reporter::Type::INDEX, external_trade_id);
+    handler("quantity"sv, roq::algo::Reporter::Type::DATA, quantity);
+    handler("price"sv, roq::algo::Reporter::Type::DATA, price);
+    handler("liquidity"sv, roq::algo::Reporter::Type::DATA, liquidity);
   }
 
   void print(OutputType output_type, std::string_view const &label) const override {
@@ -400,6 +551,7 @@ struct Implementation final : public Reporter {
     check(event);
     auto &[message_info, order_update] = event;
     auto callback = [&](auto &instrument) {
+      instrument(event);
       switch (order_update.side) {
         using enum Side;
         case UNDEFINED:
