@@ -10,4 +10,4 @@ Tools
 
 ## License
 
-The project is released under the terms of the BDS-3 license.
+The project is released under the terms of the BSD-3 license.
