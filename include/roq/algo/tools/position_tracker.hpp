@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "roq/compat.hpp"
+
 #include <fmt/format.h>
 
 #include <utility>
@@ -12,7 +14,7 @@ namespace roq {
 namespace algo {
 namespace tools {
 
-struct PositionTracker final {
+struct ROQ_PUBLIC PositionTracker final {
   // note! PositionUpdate
 
   double current_position() const { return current_position_; }

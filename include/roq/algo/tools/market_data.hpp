@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "roq/compat.hpp"
+
 #include <fmt/format.h>
 
 #include <chrono>
@@ -20,7 +22,7 @@ namespace roq {
 namespace algo {
 namespace tools {
 
-struct MarketData final {
+struct ROQ_PUBLIC MarketData final {
   MarketData(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource);
 
   MarketData(MarketData &&) = default;

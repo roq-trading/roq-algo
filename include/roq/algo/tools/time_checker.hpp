@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "roq/compat.hpp"
+
 #include <chrono>
 
 #include "roq/api.hpp"
@@ -10,7 +12,7 @@ namespace roq {
 namespace algo {
 namespace tools {
 
-struct TimeChecker final {
+struct ROQ_PUBLIC TimeChecker final {
   void operator()([[maybe_unused]] MessageInfo const &message_info) {
 #ifndef NDEBUG
     check(message_info);
