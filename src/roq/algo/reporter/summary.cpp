@@ -219,7 +219,15 @@ struct Implementation final : public Reporter {
 
   // reporter
 
-  std::span<std::string_view const> get_labels() const override { return {}; }
+  std::span<std::string_view const> get_labels() const override {
+    // XXX FIXME autogen from magic_enum::enum_names
+    static std::array<std::string_view const, 3> const RESULT{{
+        "sample_history",
+        "order_update",
+        "trade_update",
+    }};
+    return RESULT;
+  }
 
   void dispatch(Handler &handler, std::string_view const &label) const override {
     enum class Label {
