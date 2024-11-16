@@ -2,11 +2,9 @@
 
 #include "roq/algo/arbitrage/factory.hpp"
 
-#include <magic_enum.hpp>
-
-#include <nameof.hpp>
-
 #include "roq/logging.hpp"
+
+#include "roq/utils/enum.hpp"
 
 #include "roq/utils/variant/parse.hpp"
 
@@ -72,14 +70,6 @@ std::array<strategy::Meta, 7> const META{{
 // === HELPERS ===
 
 namespace {
-template <typename T>
-auto parse_enum(auto &value) {
-  auto result = magic_enum::enum_cast<T>(value, magic_enum::case_insensitive);
-  if (!result.has_value())
-    log::fatal(R"(Unexpected: value="{}")"sv, value, nameof::nameof_full_type<T>());
-  return result.value();
-}
-
 auto parameters_from_string(auto &parameters) {
   Parameters result;
   // parse
@@ -95,7 +85,7 @@ auto parameters_from_string(auto &parameters) {
       MAX_POSITION_0,
       PUBLISH_SOURCE,
     };
-    auto key_2 = parse_enum<Key>(key);
+    auto key_2 = utils::parse_enum<Key>(key);
     log::debug(R"(key={}, value="{}")"sv, magic_enum::enum_name(key_2), value);
     switch (key_2) {
       case Key::MARKET_DATA_SOURCE:

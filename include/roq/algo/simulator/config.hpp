@@ -7,38 +7,36 @@
 #include <fmt/core.h>
 #include <fmt/ranges.h>
 
+#include <string_view>
 #include <vector>
 
-#include "roq/algo/leg.hpp"
+#include "roq/algo/simulator/source.hpp"
 
 namespace roq {
 namespace algo {
-namespace strategy {
+namespace simulator {
 
 struct ROQ_PUBLIC Config final {
   static Config parse_file(std::string_view const &path);
   static Config parse_text(std::string_view const &text);
 
-  std::vector<Leg> legs;
-  uint32_t strategy_id = {};
+  std::vector<Source> sources;
 };
 
-}  // namespace strategy
+}  // namespace simulator
 }  // namespace algo
 }  // namespace roq
 
 template <>
-struct fmt::formatter<roq::algo::strategy::Config> {
+struct fmt::formatter<roq::algo::simulator::Config> {
   constexpr auto parse(format_parse_context &context) { return std::begin(context); }
-  auto format(roq::algo::strategy::Config const &value, format_context &context) const {
+  auto format(roq::algo::simulator::Config const &value, format_context &context) const {
     using namespace std::literals;
     return fmt::format_to(
         context.out(),
         R"({{)"
-        R"(legs=[{}], )"
-        R"(strategy_id={})"
+        R"(sources=[{}])"
         R"(}})"sv,
-        fmt::join(value.legs, ", "sv),
-        value.strategy_id);
+        fmt::join(value.sources, ", "sv));
   }
 };

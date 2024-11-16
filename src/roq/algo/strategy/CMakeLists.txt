@@ -1,6 +1,6 @@
 set(TARGET_NAME ${PROJECT_NAME}-strategy)
 
-set(SOURCES factory.cpp)
+set(SOURCES config.cpp factory.cpp)
 
 add_library(${TARGET_NAME} OBJECT ${SOURCES})
 

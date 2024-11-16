@@ -2,10 +2,6 @@
 
 #include "roq/algo/reporter/summary.hpp"
 
-#include <magic_enum.hpp>
-
-#include <nameof.hpp>
-
 #include <cassert>
 #include <vector>
 
@@ -13,6 +9,7 @@
 
 #include "roq/utils/common.hpp"
 #include "roq/utils/compare.hpp"
+#include "roq/utils/enum.hpp"
 #include "roq/utils/safe_cast.hpp"
 #include "roq/utils/update.hpp"
 
@@ -40,14 +37,6 @@ auto const DEFAULT_CONFIG = Summary::Config{
 // === HELPERS ===
 
 namespace {
-template <typename T>
-auto parse_enum(auto &value) {
-  auto result = magic_enum::enum_cast<T>(value, magic_enum::case_insensitive);
-  if (!result.has_value())
-    log::fatal(R"(Unexpected: value="{}" ({}))"sv, value, nameof::nameof_full_type<T>());
-  return result.value();
-}
-
 struct Implementation final : public Reporter {
   explicit Implementation(Summary::Config const &config) : market_data_source_{config.market_data_source}, sample_frequency_{config.sample_frequency} {}
 
@@ -235,7 +224,7 @@ struct Implementation final : public Reporter {
       ORDER_UPDATE,
       TRADE_UPDATE,
     };
-    auto label_2 = parse_enum<Label>(label);
+    auto label_2 = utils::parse_enum<Label>(label);
     switch (label_2) {
       using enum Label;
       case SAMPLE_HISTORY:
