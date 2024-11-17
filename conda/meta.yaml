@@ -22,6 +22,8 @@ requirements:
     - fmt
     - roq-api
     - roq-cache
+    - roq-codec
+    - roq-fix
     - roq-logging
     - roq-market
     - roq-oss-benchmark
