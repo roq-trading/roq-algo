@@ -15,6 +15,7 @@ requirements:
   build:
     - {{ compiler('cxx') }}
     - cmake
+    - doxygen
     - make
     - pkg-config
   host:

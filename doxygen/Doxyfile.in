@@ -1,0 +1,16 @@
+PROJECT_NAME           = "roq-algo"
+PROJECT_NUMBER         = "@ROQ_VERSION@"
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+CASE_SENSE_NAMES       = NO
+INPUT                  = @CMAKE_SOURCE_DIR@/include \
+                         @CMAKE_BINARY_DIR@/@CMAKE_INSTALL_INCLUDEDIR@
+RECURSIVE              = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+HIDE_UNDOC_RELATIONS   = NO
+HAVE_DOT               = NO
+COLLABORATION_GRAPH    = NO
+GROUP_GRAPHS           = NO
+GRAPHICAL_HIERARCHY    = NO

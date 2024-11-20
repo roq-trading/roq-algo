@@ -70,6 +70,16 @@ install(
   FILES_MATCHING
   PATTERN "*.hpp")
 
+# doxygen
+
+option(BUILD_DOCS "Enable doxygen" OFF)
+
+if(BUILD_DOCS)
+  find_package(Doxygen)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/doxygen)
+  add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}-doxygen)
+endif()
+
 # config
 
 install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}-config)
