@@ -26,8 +26,8 @@ void TimeChecker::check(MessageInfo const &message_info) {
     return result;
   };
   auto diff = helper(last_receive_time_, message_info.receive_time);
-  auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);        // XXX FIXME TODO track by source
-  assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);  // not really required, but this is a good place to check
+  [[maybe_unused]] auto diff_utc = helper(last_receive_time_utc_, message_info.receive_time_utc);  // XXX FIXME TODO track by source
+  assert(!std::empty(message_info.source_name) || message_info.source == SOURCE_SELF);             // not really required, but this is a good place to check
   assert(message_info.receive_time.count());
   assert(diff >= 0ns);
   assert(message_info.receive_time_utc.count());

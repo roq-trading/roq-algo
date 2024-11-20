@@ -455,7 +455,7 @@ struct Implementation final : public Reporter {
     }
   }
 
-  void print_json(std::string_view const &label) const {}
+  void print_json([[maybe_unused]] std::string_view const &label) const {}
 
   void print_csv_history() const {
     fmt::print("source,exchange,symbol,datetime_utc"sv);

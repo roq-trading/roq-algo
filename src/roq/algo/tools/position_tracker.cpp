@@ -16,7 +16,7 @@ namespace tools {
 
 // === IMPLEMENTATION ===
 
-std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_price, double multiplier) const {
+std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_price, [[maybe_unused]] double multiplier) const {
   auto tmp_1 = mark_price * position_ - cost_;
   auto unrealized_profit = std::isnan(tmp_1) ? 0.0 : tmp_1;
   auto tmp_2 = cost_ / position_;
