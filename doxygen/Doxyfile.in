@@ -4,8 +4,7 @@ EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = YES
 EXTRACT_STATIC         = YES
 CASE_SENSE_NAMES       = NO
-INPUT                  = @CMAKE_SOURCE_DIR@/include \
-                         @CMAKE_BINARY_DIR@/@CMAKE_INSTALL_INCLUDEDIR@
+INPUT                  = @CMAKE_SOURCE_DIR@/include
 RECURSIVE              = YES
 GENERATE_LATEX         = NO
 GENERATE_XML           = YES
