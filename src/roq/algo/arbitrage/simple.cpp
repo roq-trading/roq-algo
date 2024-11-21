@@ -89,7 +89,7 @@ Simple::Simple(Dispatcher &dispatcher, OrderCache &order_cache, strategy::Config
 
 void Simple::operator()(Event<Timer> const &event) {
   check(event);
-  auto &[message_info, timer] = event;
+  [[maybe_unused]] auto &[message_info, timer] = event;
   assert(timer.now > 0ns);
   // XXX TODO process delayed order requests
 }
@@ -225,7 +225,7 @@ void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
 void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
   check(event);
   auto &[message_info, order_ack] = event;
-  auto &source = sources_[message_info.source];
+  [[maybe_unused]] auto &source = sources_[message_info.source];
   assert(source.ready);
   auto callback = [&]([[maybe_unused]] auto &account, [[maybe_unused]] auto &instrument) {
     switch (order_ack.origin) {
