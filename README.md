@@ -1,10 +1,15 @@
 # roq-algo
 
-Tools
+API for algorithmic and high-frequency trading (HFT).
 
-## Matcher
+This project contains
 
-### Design
+* Interfaces for implementing algorithmic trading strategies
+* Interfaces for implementing exchange matching simulation
+* Interfaces for simulation reporting
+* Reference implementations
+
+## Design
 
 ![Design](/static/images/simulator.png)
 
