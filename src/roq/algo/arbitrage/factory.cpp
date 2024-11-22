@@ -65,7 +65,7 @@ std::array<strategy::Meta, 7> const META{{
         .description = "Source (index) used for publishing custom metrics"sv,
     },
 }};
-}
+}  // namespace
 
 // === HELPERS ===
 
