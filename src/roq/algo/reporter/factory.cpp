@@ -18,8 +18,8 @@ namespace {
 struct None final : public Reporter {
   std::span<std::string_view const> get_labels() const override { return {}; }
   void dispatch(Handler &, [[maybe_unused]] std::string_view const &label) const override { throw RuntimeError{"not supported"sv}; }
-  virtual void print(OutputType, std::string_view const &) const override {}
-  virtual void write(std::string_view const &, OutputType, std::string_view const &) const override {}
+  void print(OutputType, std::string_view const &) const override {}
+  void write(std::string_view const &, OutputType, std::string_view const &) const override {}
 };
 }  // namespace
 
