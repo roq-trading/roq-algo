@@ -4,13 +4,13 @@
 
 #include "roq/algo/matcher/factory.hpp"
 
+using namespace std::literals;
+
 using namespace roq;
 using namespace roq::algo;
 using namespace roq::algo::matcher;
 
-using namespace std::literals;
-
-TEST_CASE("simple", "[algo/matcher]") {
+TEST_CASE("algo_matcher_simple", "[algo_matcher]") {
   struct MyDispatcher final : public Matcher::Dispatcher {
     void operator()(Event<ReferenceData> const &) override {}
     void operator()(Event<MarketStatus> const &) override {}

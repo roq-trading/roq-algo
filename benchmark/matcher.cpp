@@ -4,11 +4,11 @@
 
 #include "roq/algo/matcher/factory.hpp"
 
+using namespace std::literals;
+
 using namespace roq;
 using namespace roq::algo;
 using namespace roq::algo::matcher;
-
-using namespace std::literals;
 
 void BM_tools_Simple_add(benchmark::State &state) {
   struct MyDispatcher final : public Matcher::Dispatcher {
