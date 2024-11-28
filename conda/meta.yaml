@@ -15,7 +15,9 @@ requirements:
   build:
     - {{ compiler('cxx') }}
     - cmake
+    - coreutils                                                                                                                                                    
     - doxygen
+    - git
     - make
     - pkg-config
   host:
