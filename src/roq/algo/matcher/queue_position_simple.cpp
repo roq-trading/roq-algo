@@ -1,6 +1,6 @@
 /* Copyright (c) 2017-2025, Hans Erik Thrane */
 
-#include "roq/algo/matcher/simple.hpp"
+#include "roq/algo/matcher/queue_position_simple.hpp"
 
 #include "roq/logging.hpp"
 
@@ -13,41 +13,45 @@ namespace roq {
 namespace algo {
 namespace matcher {
 
+// trades => reduce
+// quote => min
+// do we need to count our quantity?
+
 // === HELPERS ===
 
 namespace {
+// note! priority is preserved by first ordering by price (internal) and then by order_id
 auto compare_buy_orders = [](auto &lhs, auto &rhs) {
-  if (lhs.first > rhs.first)
+  if (lhs.price > rhs.price)
     return true;
-  if (lhs.first == rhs.first)
-    return lhs.second < rhs.second;
+  if (lhs.price == rhs.price)
+    return lhs.order_id < rhs.order_id;
   return false;
 };
 
+// note! priority is preserved by first ordering by price (internal) and then by order_id
 auto compare_sell_orders = [](auto &lhs, auto &rhs) {
-  if (lhs.first < rhs.first)
+  if (lhs.price < rhs.price)
     return true;
-  if (lhs.first == rhs.first)
-    return lhs.second < rhs.second;
+  if (lhs.price == rhs.price)
+    return lhs.order_id < rhs.order_id;
   return false;
 };
 
-void add_order_helper(auto &container, auto compare, auto order_id, auto price) {
-  std::pair value{price, order_id};
-  auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
+void add_order_helper(auto &container, auto &&order, auto compare) {
+  auto iter = std::lower_bound(std::begin(container), std::end(container), order, compare);
   if (iter != std::end(container)) {
-    if ((*iter).first == price && (*iter).second == order_id) [[unlikely]]  // duplicate?
-      log::fatal("Unexpected: internal error"sv);
-    container.insert(iter, value);
+    if ((*iter).price == order.price && (*iter).order_id == order.order_id) [[unlikely]]
+      log::fatal("Unexpected: internal error"sv);  // duplicate
+    container.insert(iter, order);
   } else {
-    container.emplace_back(value);
+    container.emplace_back(std::move(order));
   }
 }
 
-auto remove_order_helper(auto &container, auto compare, auto order_id, auto price) {
-  std::pair value{price, order_id};
-  auto iter = std::lower_bound(std::begin(container), std::end(container), value, compare);
-  if (iter == std::end(container) || (*iter).first != price || (*iter).second != order_id)
+auto remove_order_helper(auto &container, auto &order, auto compare) {
+  auto iter = std::lower_bound(std::begin(container), std::end(container), order, compare);
+  if (iter == std::end(container) || (*iter).price != order.price || (*iter).order_id != order.order_id)
     return false;
   container.erase(iter);
   return true;
@@ -57,10 +61,10 @@ template <typename Callback>
 void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cache, Callback callback) {
   auto iter = std::begin(container);
   for (; iter != std::end(container); ++iter) {
-    auto &[price, order_id] = *iter;
-    if (!compare(price, top_of_book))
+    auto &order = *iter;
+    if (!compare(order.price, top_of_book))
       break;
-    if (cache.get_order(order_id, [&](auto &order) { callback(order); })) {
+    if (cache.get_order(order.order_id, [&](auto &order) { callback(order); })) {
     } else {
       log::fatal("Unexpected: internal error"sv);
     }
@@ -71,58 +75,64 @@ void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cac
 
 // === IMPLEMENTATION ===
 
-Simple::Simple(Dispatcher &dispatcher, OrderCache &order_cache, Config const &config)
+QueuePositionSimple::QueuePositionSimple(Dispatcher &dispatcher, OrderCache &order_cache, Config const &config)
     : dispatcher_{dispatcher}, order_cache_{order_cache}, market_data_{config.exchange, config.symbol, config.market_data_source} {
+  if (config.market_data_source == MarketDataSource::TOP_OF_BOOK)
+    throw RuntimeError{"Unsupported: market_data_source={}"sv, config.market_data_source};
 }
 
 // note! the following handlers **must** dispatch market data and **may** potentially overlay own orders and fills
 
-void Simple::operator()(Event<ReferenceData> const &event) {
+void QueuePositionSimple::operator()(Event<ReferenceData> const &event) {
   check(event);
   dispatcher_(event);  // note!
   market_data_(event);
 }
 
-void Simple::operator()(Event<MarketStatus> const &event) {
+void QueuePositionSimple::operator()(Event<MarketStatus> const &event) {
   check(event);
   dispatcher_(event);  // note!
   market_data_(event);
 }
 
-void Simple::operator()(Event<TopOfBook> const &event) {
+void QueuePositionSimple::operator()(Event<TopOfBook> const &event) {
   check(event);
   dispatcher_(event);  // note!
   if (market_data_(event))
     match_resting_orders(event);
 }
 
-void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
+void QueuePositionSimple::operator()(Event<MarketByPriceUpdate> const &event) {
+  check(event);
+  dispatcher_(event);  // note!
+  if (market_data_(event)) {
+    // HANS here we should just iterate our own orders (cost will be smaller) and update min()
+    // --- maybe some hash with working order prices? and mark dirty?
+    match_resting_orders(event);
+  }
+}
+
+void QueuePositionSimple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
   dispatcher_(event);  // note!
   if (market_data_(event))
     match_resting_orders(event);
 }
 
-void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
+void QueuePositionSimple::operator()(Event<TradeSummary> const &event) {
   check(event);
   dispatcher_(event);  // note!
   if (market_data_(event))
-    match_resting_orders(event);
+    match_resting_orders_2(event);
 }
 
-void Simple::operator()(Event<TradeSummary> const &event) {
+void QueuePositionSimple::operator()(Event<StatisticsUpdate> const &event) {
   check(event);
   dispatcher_(event);  // note!
   market_data_(event);
 }
 
-void Simple::operator()(Event<StatisticsUpdate> const &event) {
-  check(event);
-  dispatcher_(event);  // note!
-  market_data_(event);
-}
-
-void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
+void QueuePositionSimple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
   check(event);
   auto &[message_info, create_order] = event;
   auto validate = [&]() -> Error {
@@ -153,9 +163,9 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
           [[unlikely]] case UNDEFINED:
             break;
           case BUY:
-            return top_of_book_.external.second;
+            return top_of_book_.external.ask_price;
           case SELL:
-            return top_of_book_.external.first;
+            return top_of_book_.external.bid_price;
         }
         log::fatal("Unexpected"sv);
       }();
@@ -197,12 +207,12 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
   }
 }
 
-void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
+void QueuePositionSimple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
   check(event);
   dispatch_order_ack(event, order, Error::NOT_SUPPORTED);
 }
 
-void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
+void QueuePositionSimple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   check(event);
   auto &[message_info, cancel_order] = event;
   if (utils::is_order_complete(order.order_status)) {
@@ -222,14 +232,14 @@ void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   }
 }
 
-void Simple::operator()(Event<CancelAllOrders> const &event) {
+void QueuePositionSimple::operator()(Event<CancelAllOrders> const &event) {
   check(event);
   log::fatal("NOT IMPLEMENTED"sv);
 }
 
 // market
 
-void Simple::match_resting_orders(MessageInfo const &message_info) {
+void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) {
   if (!market_data_.has_tick_size())
     return;
   auto convert = [this](auto price, auto default_value) {
@@ -265,22 +275,48 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
     dispatch_trade_update(message_info, order, fill);
   };
   auto &top_of_book = market_data_.top_of_book();
+  // HANS check min()
   auto bid = convert(top_of_book.bid_price, std::numeric_limits<int64_t>::min());
-  if (utils::update(top_of_book_.internal.first, bid)) {
-    top_of_book_.external.first = top_of_book.bid_price;
+  if (utils::update(top_of_book_.internal.bid_price, bid)) {
+    top_of_book_.external.bid_price = top_of_book.bid_price;
     try_match(Side::BUY, matched_order);
   }
   auto ask = convert(top_of_book.ask_price, std::numeric_limits<int64_t>::max());
-  if (utils::update(top_of_book_.internal.second, ask)) {
-    top_of_book_.external.second = top_of_book.ask_price;
+  if (utils::update(top_of_book_.internal.ask_price, ask)) {
+    top_of_book_.external.ask_price = top_of_book.ask_price;
     try_match(Side::SELL, matched_order);
   }
+}
+
+void QueuePositionSimple::match_resting_orders_2(Event<TradeSummary> const &event) {
+  auto &[message_info, trade_summary] = event;
+  assert(!std::empty(trade_summary.trades));
+  auto helper = [&](auto price, auto total_quantity) {
+    // HANS XXX TODO
+    // like try_match with matched_order callback (reuse)
+    // remember -- fills happen (mostly) near top of book
+  };
+  auto price = NaN;
+  auto total_quantity = 0.0;
+  for (auto &item : trade_summary.trades) {
+    if (std::isnan(price) || utils::compare(price, item.price) != 0) {
+      if (utils::compare(total_quantity, 0.0) > 0) {
+        assert(!std::isnan(price));
+        helper(price, total_quantity);
+      }
+      price = item.price;
+      total_quantity = 0.0;
+    }
+  }
+  assert(!std::isnan(price));
+  assert(utils::compare(total_quantity, 0.0) > 0);
+  helper(price, total_quantity);
 }
 
 // orders
 
 template <typename T>
-void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order, Error error, RequestStatus request_status) {
+void QueuePositionSimple::dispatch_order_ack(Event<T> const &event, cache::Order const &order, Error error, RequestStatus request_status) {
   auto &[message_info, value] = event;
   auto get_request_status = [&]() {
     if (request_status != RequestStatus{})
@@ -326,7 +362,7 @@ void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order
   create_event_and_dispatch(dispatcher_, message_info, order_ack);
 }
 
-void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order &order) {
+void QueuePositionSimple::dispatch_order_update(MessageInfo const &message_info, cache::Order &order) {
   if (!order.create_time_utc.count())
     order.create_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy create time (not exchange time)
   order.update_time_utc = market_data_.exchange_time_utc();    // XXX FIXME TODO this is strategy receive time (not exchange time)
@@ -336,7 +372,7 @@ void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order
   create_event_and_dispatch(dispatcher_, message_info, order_update);
 }
 
-void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order const &order, Fill const &fill) {
+void QueuePositionSimple::dispatch_trade_update(MessageInfo const &message_info, cache::Order const &order, Fill const &fill) {
   auto trade_update = TradeUpdate{
       .account = order.account,
       .order_id = order.order_id,
@@ -361,51 +397,62 @@ void Simple::dispatch_trade_update(MessageInfo const &message_info, cache::Order
 
 // utils
 
-bool Simple::is_aggressive(Side side, int64_t price) const {
+bool QueuePositionSimple::is_aggressive(Side side, int64_t price) const {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       assert(false);
       break;
     case BUY:
-      return price >= top_of_book_.internal.second;
+      return price >= top_of_book_.internal.ask_price;
     case SELL:
-      return price <= top_of_book_.internal.first;
+      return price <= top_of_book_.internal.bid_price;
   }
   log::fatal("Unexpected"sv);
 }
 
-void Simple::add_order(uint64_t order_id, Side side, int64_t price) {
+void QueuePositionSimple::add_order(uint64_t order_id, Side side, int64_t price) {
+  auto quantity = market_data_.total_quantity(side, price);
+  auto order = Order{
+      .order_id = order_id,
+      .price = price,
+      .ahead = quantity,
+  };
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       assert(false);
       log::fatal("Unexpected"sv);
     case BUY:
-      add_order_helper(buy_orders_, compare_buy_orders, order_id, price);
+      add_order_helper(buy_orders_, std::move(order), compare_buy_orders);
       break;
     case SELL:
-      add_order_helper(sell_orders_, compare_sell_orders, order_id, price);
+      add_order_helper(sell_orders_, std::move(order), compare_sell_orders);
       break;
   }
 }
 
-bool Simple::remove_order(uint64_t order_id, Side side, int64_t price) {
+bool QueuePositionSimple::remove_order(uint64_t order_id, Side side, int64_t price) {
+  auto order = Order{
+      .order_id = order_id,
+      .price = price,
+      .ahead = {},
+  };
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
       assert(false);
       break;
     case BUY:
-      return remove_order_helper(buy_orders_, compare_buy_orders, order_id, price);
+      return remove_order_helper(buy_orders_, order, compare_buy_orders);
     case SELL:
-      return remove_order_helper(sell_orders_, compare_sell_orders, order_id, price);
+      return remove_order_helper(sell_orders_, order, compare_sell_orders);
   }
   log::fatal("Unexpected"sv);
 }
 
 template <typename Callback>
-void Simple::try_match(Side side, Callback callback) {
+void QueuePositionSimple::try_match(Side side, Callback callback) {
   switch (side) {
     using enum Side;
     [[unlikely]] case UNDEFINED:
@@ -413,19 +460,19 @@ void Simple::try_match(Side side, Callback callback) {
       log::fatal("Unexpected"sv);
     case BUY: {
       auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
-      try_match_helper(sell_orders_, compare, top_of_book_.internal.first, order_cache_, callback);
+      try_match_helper(sell_orders_, compare, top_of_book_.internal.bid_price, order_cache_, callback);
       break;
     }
     case SELL: {
       auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
-      try_match_helper(buy_orders_, compare, top_of_book_.internal.second, order_cache_, callback);
+      try_match_helper(buy_orders_, compare, top_of_book_.internal.ask_price, order_cache_, callback);
       break;
     }
   }
 }
 
 template <typename T>
-void Simple::check(Event<T> const &event) {
+void QueuePositionSimple::check(Event<T> const &event) {
   auto &[message_info, value] = event;
   log::debug(
       "[{}:{}] receive_time={}, receive_time_utc={}, {}={}"sv,

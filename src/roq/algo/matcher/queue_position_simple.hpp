@@ -19,24 +19,14 @@ namespace roq {
 namespace algo {
 namespace matcher {
 
-// simple matcher
-//
-// placing a new order
-// - price crossing market best => immediately filled
-// - price not crossing market best => leaves a resting order
-//
-// market best updates
-// - fills any resting orders crossing market best
-//
-// supports
-// - limit orders
+// queue position simple matcher
 
-struct Simple final : public Matcher {
+struct QueuePositionSimple final : public Matcher {
   using Dispatcher = Matcher::Dispatcher;
 
-  Simple(Dispatcher &, OrderCache &, Config const &);
+  QueuePositionSimple(Dispatcher &, OrderCache &, Config const &);
 
-  Simple(Simple const &) = delete;
+  QueuePositionSimple(QueuePositionSimple const &) = delete;
 
  protected:
   void operator()(Event<ReferenceData> const &) override;
@@ -57,6 +47,7 @@ struct Simple final : public Matcher {
   // market
 
   void match_resting_orders(MessageInfo const &);
+  void match_resting_orders_2(Event<TradeSummary> const &);
 
   // orders
 
@@ -87,15 +78,22 @@ struct Simple final : public Matcher {
   tools::MarketData market_data_;
   // note! internal (integer) is in units of tick_size, external (floating point) is the real price
   struct {
-    std::pair<int64_t, int64_t> internal = {
-        std::numeric_limits<int64_t>::min(),
-        std::numeric_limits<int64_t>::max(),
-    };
-    std::pair<double, double> external = {NaN, NaN};
+    struct {
+      int64_t bid_price = std::numeric_limits<int64_t>::min();
+      int64_t ask_price = std::numeric_limits<int64_t>::max();
+    } internal;
+    struct {
+      double bid_price = NaN;
+      double ask_price = NaN;
+    } external;
   } top_of_book_;
-  // note! priority is preserved by first ordering by price (internal) and then by order_id
-  std::vector<std::pair<int64_t, uint64_t>> buy_orders_;
-  std::vector<std::pair<int64_t, uint64_t>> sell_orders_;
+  struct Order final {
+    uint64_t order_id = {};
+    int64_t price = {};
+    double ahead = NaN;  // note! could change this to uint64_t
+  };
+  std::vector<Order> buy_orders_;
+  std::vector<Order> sell_orders_;
   // DEBUG
   tools::TimeChecker time_checker_;
 };

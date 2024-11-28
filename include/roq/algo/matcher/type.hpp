@@ -12,6 +12,7 @@ namespace matcher {
 
 enum class Type {
   SIMPLE,
+  QUEUE_POSITION_SIMPLE,
 };
 
 }  // namespace matcher

@@ -1,6 +1,6 @@
 set(TARGET_NAME ${PROJECT_NAME}-matcher)
 
-set(SOURCES factory.cpp simple.cpp)
+set(SOURCES factory.cpp queue_position_simple.cpp simple.cpp)
 
 add_library(${TARGET_NAME} OBJECT ${SOURCES})
 

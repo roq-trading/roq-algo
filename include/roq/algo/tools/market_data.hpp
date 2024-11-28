@@ -37,6 +37,9 @@ struct ROQ_PUBLIC MarketData final {
   // note! depends on MarketDataSource
   Layer const &top_of_book() const { return best_; }
 
+  // note! only possible with MbP or MbO
+  double total_quantity(Side, double price) const;
+
   std::chrono::nanoseconds exchange_time_utc() const { return exchange_time_utc_; }
 
   bool operator()(Event<ReferenceData> const &);
@@ -47,7 +50,7 @@ struct ROQ_PUBLIC MarketData final {
   bool operator()(Event<MarketByPriceUpdate> const &);
   bool operator()(Event<MarketByOrderUpdate> const &);
 
-  void operator()(Event<TradeSummary> const &);
+  bool operator()(Event<TradeSummary> const &);
   void operator()(Event<StatisticsUpdate> const &);
 
   template <typename OutputIt>

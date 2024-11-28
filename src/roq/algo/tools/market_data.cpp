@@ -57,6 +57,19 @@ std::pair<int64_t, bool> MarketData::price_to_ticks(double price) const {
   return market::price_to_ticks(price, tick_size_, precision_);
 }
 
+double MarketData::total_quantity(Side side, double price) const {
+  switch (market_data_source_) {
+    using enum MarketDataSource;
+    case TOP_OF_BOOK:
+      break;
+    case MARKET_BY_PRICE:
+      return (*market_by_price_).total_quantity(side, price);
+    case MARKET_BY_ORDER:
+      return (*market_by_order_).total_quantity(side, price);
+  }
+  throw RuntimeError{"Unexpected: market_data_source={}"sv, market_data_source_};
+}
+
 bool MarketData::operator()(Event<ReferenceData> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   auto &[message_info, reference_data] = event;
@@ -110,8 +123,9 @@ bool MarketData::operator()(Event<MarketByOrderUpdate> const &event) {
   return true;
 }
 
-void MarketData::operator()(Event<TradeSummary> const &event) {
+bool MarketData::operator()(Event<TradeSummary> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
+  return true;  // note! only incremental
 }
 
 void MarketData::operator()(Event<StatisticsUpdate> const &event) {
