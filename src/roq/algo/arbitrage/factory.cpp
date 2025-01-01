@@ -2,6 +2,10 @@
 
 #include "roq/algo/arbitrage/factory.hpp"
 
+#include <fmt/core.h>
+
+#include <magic_enum/magic_enum_format.hpp>
+
 #include "roq/logging.hpp"
 
 #include "roq/utils/enum.hpp"
@@ -86,7 +90,7 @@ auto parameters_from_string(auto &parameters) {
       PUBLISH_SOURCE,
     };
     auto key_2 = utils::parse_enum<Key>(key);
-    log::debug(R"(key={}, value="{}")"sv, magic_enum::enum_name(key_2), value);
+    log::debug(R"(key={}, value="{}")"sv, key_2, value);
     switch (key_2) {
       case Key::MARKET_DATA_SOURCE:
         utils::variant::parse(result.market_data_source, value);

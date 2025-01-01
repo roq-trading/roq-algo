@@ -2,6 +2,10 @@
 
 #include "roq/algo/reporter/factory.hpp"
 
+#include <fmt/core.h>
+
+#include <magic_enum/magic_enum_format.hpp>
+
 #include "roq/logging.hpp"
 
 #include "roq/algo/reporter/summary.hpp"
@@ -33,7 +37,7 @@ std::unique_ptr<Reporter> Factory::create(Type type) {
     case SUMMARY:
       return Summary::create();
   }
-  log::fatal("Unexpected: type={}"sv, magic_enum::enum_name(type));
+  log::fatal("Unexpected: type={}"sv, type);
 }
 
 }  // namespace reporter

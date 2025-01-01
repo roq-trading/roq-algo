@@ -2,6 +2,10 @@
 
 #include "roq/algo/matcher/factory.hpp"
 
+#include <fmt/core.h>
+
+#include <magic_enum/magic_enum_format.hpp>
+
 #include "roq/logging.hpp"
 
 #include "roq/algo/matcher/queue_position_simple.hpp"
@@ -23,7 +27,7 @@ std::unique_ptr<Matcher> Factory::create(Type type, Matcher::Dispatcher &dispatc
     case QUEUE_POSITION_SIMPLE:
       return std::make_unique<QueuePositionSimple>(dispatcher, order_cache, config);
   }
-  log::fatal("Unexpected: type={}"sv, magic_enum::enum_name(type));
+  log::fatal("Unexpected: type={}"sv, type);
 }
 
 }  // namespace matcher

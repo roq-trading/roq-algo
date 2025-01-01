@@ -2,6 +2,8 @@
 
 #include "roq/algo/reporter/summary.hpp"
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <cassert>
 #include <vector>
 

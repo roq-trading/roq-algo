@@ -2,6 +2,8 @@
 
 #include "roq/algo/matcher/simple.hpp"
 
+#include <magic_enum/magic_enum.hpp>
+
 #include "roq/logging.hpp"
 
 #include "roq/utils/common.hpp"

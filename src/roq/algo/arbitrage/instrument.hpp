@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include <fmt/format.h>
+#include <fmt/core.h>
 
-#include <magic_enum/magic_enum.hpp>
+#include <magic_enum/magic_enum_format.hpp>
 
 #include <string>
 #include <utility>
@@ -82,7 +82,7 @@ struct Instrument final {
         account,
         market_data_,
         position_tracker_,
-        magic_enum::enum_name(order_state),
+        order_state,
         order_id);
   }
 
