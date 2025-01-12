@@ -21,6 +21,9 @@ struct ROQ_PUBLIC Strategy {
 
     virtual void send(CancelAllOrders const &, uint8_t source) = 0;
 
+    virtual void send(MassQuote const &, uint8_t source) = 0;
+    virtual void send(CancelQuotes const &, uint8_t source) = 0;
+
     virtual void send(CustomMetrics const &, uint8_t source) = 0;
     virtual void send(CustomMatrix const &, uint8_t source) = 0;
   };
@@ -81,6 +84,10 @@ struct ROQ_PUBLIC Strategy {
 
   // risk managemenet
   virtual void operator()(Event<RiskLimitsUpdate> const &) {}
+
+  // market making
+  virtual void operator()(Event<MassQuoteAck> const &) {}
+  virtual void operator()(Event<CancelQuotesAck> const &) {}
 
   // metrics
   virtual void operator()(metrics::Writer &) const {}

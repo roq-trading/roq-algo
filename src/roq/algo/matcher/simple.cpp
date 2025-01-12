@@ -229,6 +229,16 @@ void Simple::operator()(Event<CancelAllOrders> const &event) {
   log::fatal("NOT IMPLEMENTED"sv);
 }
 
+void Simple::operator()(Event<MassQuote> const &event) {
+  check(event);
+  log::fatal("NOT IMPLEMENTED"sv);
+}
+
+void Simple::operator()(Event<CancelQuotes> const &event) {
+  check(event);
+  log::fatal("NOT IMPLEMENTED"sv);
+}
+
 // market
 
 void Simple::match_resting_orders(MessageInfo const &message_info) {

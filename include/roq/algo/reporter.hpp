@@ -81,11 +81,17 @@ struct ROQ_PUBLIC Reporter {
   virtual void operator()(Event<PositionUpdate> const &) {}
   virtual void operator()(Event<FundsUpdate> const &) {}
 
+  // market making
+  virtual void operator()(Event<MassQuoteAck> const &) {}
+  virtual void operator()(Event<CancelQuotesAck> const &) {}
+
   // client requests
   virtual void operator()(Event<CreateOrder> const &) {}
   virtual void operator()(Event<ModifyOrder> const &) {}
   virtual void operator()(Event<CancelOrder> const &) {}
   virtual void operator()(Event<CancelAllOrders> const &) {}
+  virtual void operator()(Event<MassQuote> const &) {}
+  virtual void operator()(Event<CancelQuotes> const &) {}
 
   // broadcast
   virtual void operator()(Event<CustomMetricsUpdate> const &) {}

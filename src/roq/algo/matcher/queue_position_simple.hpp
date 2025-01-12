@@ -44,6 +44,9 @@ struct QueuePositionSimple final : public Matcher {
 
   void operator()(Event<CancelAllOrders> const &) override;
 
+  void operator()(Event<MassQuote> const &) override;
+  void operator()(Event<CancelQuotes> const &) override;
+
   // market
 
   void match_resting_orders(MessageInfo const &);

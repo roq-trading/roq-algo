@@ -239,6 +239,16 @@ void QueuePositionSimple::operator()(Event<CancelAllOrders> const &event) {
   log::fatal("NOT IMPLEMENTED"sv);
 }
 
+void QueuePositionSimple::operator()(Event<MassQuote> const &event) {
+  check(event);
+  log::fatal("NOT IMPLEMENTED"sv);
+}
+
+void QueuePositionSimple::operator()(Event<CancelQuotes> const &event) {
+  check(event);
+  log::fatal("NOT IMPLEMENTED"sv);
+}
+
 // market
 
 void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) {

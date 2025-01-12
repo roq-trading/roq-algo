@@ -22,6 +22,8 @@ void BM_tools_Simple_add(benchmark::State &state) {
     void operator()(Event<OrderAck> const &) override {}
     void operator()(Event<OrderUpdate> const &) override {}
     void operator()(Event<TradeUpdate> const &) override {}
+    void operator()(Event<MassQuoteAck> const &) override {}
+    void operator()(Event<CancelQuotesAck> const &) override {}
   } dispatcher;
   struct MyOrderCache final : public OrderCache {
     cache::Order *get_order_helper([[maybe_unused]] uint64_t order_id) override { return nullptr; }

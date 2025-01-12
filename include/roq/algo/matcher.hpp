@@ -25,6 +25,9 @@ struct ROQ_PUBLIC Matcher {
     virtual void operator()(Event<OrderAck> const &) = 0;
     virtual void operator()(Event<OrderUpdate> const &) = 0;
     virtual void operator()(Event<TradeUpdate> const &) = 0;
+
+    virtual void operator()(Event<MassQuoteAck> const &) = 0;
+    virtual void operator()(Event<CancelQuotesAck> const &) = 0;
   };
 
   virtual ~Matcher() {}
@@ -43,6 +46,9 @@ struct ROQ_PUBLIC Matcher {
   virtual void operator()(Event<CancelOrder> const &, cache::Order &) = 0;
 
   virtual void operator()(Event<CancelAllOrders> const &) = 0;
+
+  virtual void operator()(Event<MassQuote> const &) = 0;
+  virtual void operator()(Event<CancelQuotes> const &) = 0;
 };
 
 }  // namespace algo
