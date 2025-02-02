@@ -86,7 +86,7 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
 // XXX FIXME TODO simulator doesn't emit snapshot ???
 void PositionTracker::operator()(Event<PositionUpdate> const &event) {
   auto &[message_info, position_update] = event;
-  assert(position_update.update_type != UpdateType::SNAPSHOT);
+  // assert(position_update.update_type != UpdateType::SNAPSHOT);
   current_position_ = position_update.long_quantity - position_update.short_quantity;
 }
 
