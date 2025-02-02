@@ -15,6 +15,11 @@ namespace algo {
 
 struct ROQ_PUBLIC Strategy {
   struct ROQ_PUBLIC Dispatcher {
+    virtual void operator()(ControlAck const &, uint8_t source) = 0;
+    virtual void operator()(ServiceUpdate const &) = 0;
+    virtual void operator()(StrategyUpdate const &) = 0;
+    virtual void operator()(LegsUpdate const &) = 0;
+
     virtual void send(CreateOrder const &, uint8_t source, bool is_last = true) = 0;
     virtual void send(ModifyOrder const &, uint8_t source, bool is_last = true) = 0;
     virtual void send(CancelOrder const &, uint8_t source, bool is_last = true) = 0;
@@ -34,15 +39,15 @@ struct ROQ_PUBLIC Strategy {
   virtual void operator()(Event<Start> const &) {}
   virtual void operator()(Event<Stop> const &) {}
   virtual void operator()(Event<Timer> const &) {}
+
+  // connection
   virtual void operator()(Event<Connected> const &) {}
   virtual void operator()(Event<Disconnected> const &) {}
 
   // control
-  virtual bool operator()(Event<ServiceUpdate> const &) { return true; }
-  virtual bool operator()(Event<StrategyUpdate> const &) { return true; }
-  virtual bool operator()(Event<LegsUpdate> const &) { return true; }
+  virtual void operator()(Event<Control> const &) {};
 
-  // control
+  // download
   virtual void operator()(Event<DownloadBegin> const &) {}
   virtual void operator()(Event<DownloadEnd> const &) {}
   virtual void operator()(Event<Ready> const &) {}
