@@ -36,7 +36,7 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
       assert(false);  // note! should never happen
       break;
     case SNAPSHOT:
-      assert(false);  // XXX FIXME TODO support download
+      // assert(false);  // XXX FIXME TODO support download
       break;
     case INCREMENTAL: {
       // note! switch is inside loop because price can be different for each fill + we need to track when position crosses long/short
