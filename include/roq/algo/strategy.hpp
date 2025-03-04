@@ -86,6 +86,10 @@ struct ROQ_PUBLIC Strategy {
   virtual void operator()(Event<PositionUpdate> const &) {}
   virtual void operator()(Event<FundsUpdate> const &) {}
 
+  // broadcast
+  virtual void operator()(Event<CustomMetricsUpdate> const &) {}
+  virtual void operator()(Event<CustomMatrixUpdate> const &) {}
+
   // parameters
   virtual void operator()(Event<ParametersUpdate> const &) {}
 
