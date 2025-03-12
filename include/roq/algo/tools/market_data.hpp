@@ -40,6 +40,10 @@ struct ROQ_PUBLIC MarketData final {
   // note! only possible with MbP or MbO
   double total_quantity(Side, double price) const;
 
+  double get_tick_size() const { return tick_size_; }
+  double get_multiplier() const { return multiplier_; }
+  double get_min_trade_vol() const { return min_trade_vol_; }
+
   std::chrono::nanoseconds exchange_time_utc() const { return exchange_time_utc_; }
 
   bool operator()(Event<ReferenceData> const &);
