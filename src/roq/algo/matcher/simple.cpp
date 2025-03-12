@@ -148,6 +148,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
     auto [price, overflow] = market_data_.price_to_ticks(create_order.price);
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    // FIXME TODO align with ModifyOrder
     if (is_aggressive(create_order.side, price)) {
       auto matched_price = [&]() -> double {
         switch (create_order.side) {
@@ -201,25 +202,98 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
 
 void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
   check(event);
-  dispatch_order_ack(event, order, Error::NOT_SUPPORTED);
+  auto &[message_info, modify_order] = event;
+  auto has_no_effect = [&]() -> bool {
+    auto change = false;
+    change |= !std::isnan(modify_order.quantity) && utils::compare(modify_order.quantity, order.quantity) != 0;
+    change |= !std::isnan(modify_order.price) && utils::compare(modify_order.price, order.price) != 0;
+    return !change;
+  };
+  auto validate = [&]() -> Error {
+    if (utils::is_order_complete(order.order_status))
+      return Error::TOO_LATE_TO_MODIFY_OR_CANCEL;
+    if (has_no_effect())
+      return Error::MODIFY_HAS_NO_EFFECT;
+    if (!std::isnan(modify_order.quantity))  // for now, only support price change
+      return Error::NOT_SUPPORTED;
+    return {};
+  };
+  if (auto error = validate(); error != Error{}) {
+    dispatch_order_ack(event, order, error);
+  } else {
+    auto [price_0, overflow_0] = market_data_.price_to_ticks(order.price);
+    if (overflow_0) [[unlikely]]
+      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    auto [price_1, overflow_1] = market_data_.price_to_ticks(modify_order.price);
+    if (overflow_1) [[unlikely]]
+      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    if (!remove_order(order.order_id, order.side, price_0))
+      log::fatal("Unexpected: internal error"sv);
+    // FIXME TODO align with CreateOrder
+    if (is_aggressive(order.side, price_1)) {
+      auto matched_price = [&]() -> double {
+        switch (order.side) {
+          using enum Side;
+          [[unlikely]] case UNDEFINED:
+            break;
+          case BUY:
+            return top_of_book_.external.second;
+          case SELL:
+            return top_of_book_.external.first;
+        }
+        log::fatal("Unexpected"sv);
+      }();
+      auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
+      auto fill = Fill{
+          .exchange_time_utc = market_data_.exchange_time_utc(),
+          .external_trade_id = external_trade_id,
+          .quantity = order.quantity,
+          .price = matched_price,
+          .liquidity = Liquidity::TAKER,
+          .quote_quantity = NaN,
+          .commission_quantity = NaN,
+          .commission_currency = {},
+      };
+      order.update_time_utc = market_data_.exchange_time_utc();
+      order.order_status = OrderStatus::COMPLETED;
+      order.remaining_quantity = 0.0;
+      order.traded_quantity = fill.quantity;
+      order.average_traded_price = fill.price;
+      order.last_traded_quantity = fill.quantity;
+      order.last_traded_price = fill.price;
+      order.last_liquidity = fill.liquidity;
+      dispatch_order_update(message_info, order);
+      dispatch_trade_update(message_info, order, fill);
+    } else {
+      add_order(order.order_id, order.side, price_1);
+      order.update_time_utc = market_data_.exchange_time_utc();
+      utils::update(order.quantity, modify_order.quantity);
+      utils::update(order.price, modify_order.price);
+      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+      dispatch_order_update(message_info, order);
+    }
+  }
 }
 
 void Simple::operator()(Event<CancelOrder> const &event, cache::Order &order) {
   check(event);
   auto &[message_info, cancel_order] = event;
-  if (utils::is_order_complete(order.order_status)) {
-    dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
+  auto validate = [&]() -> Error {
+    if (utils::is_order_complete(order.order_status))
+      return Error::TOO_LATE_TO_MODIFY_OR_CANCEL;
+    return {};
+  };
+  if (auto error = validate(); error != Error{}) {
+    dispatch_order_ack(event, order, error);
   } else {
     auto [price, overflow] = market_data_.price_to_ticks(order.price);
     if (overflow) [[unlikely]]
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
-    if (remove_order(order.order_id, order.side, price)) {
-      order.update_time_utc = market_data_.exchange_time_utc();
-      order.order_status = OrderStatus::CANCELED;
-      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-    } else {
-      dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL, RequestStatus::REJECTED);
-    }
+    if (!remove_order(order.order_id, order.side, price))
+      log::fatal("Unexpected: internal error"sv);
+    order.update_time_utc = market_data_.exchange_time_utc();
+    order.order_status = OrderStatus::CANCELED;
+    dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
     dispatch_order_update(message_info, order);
   }
 }
