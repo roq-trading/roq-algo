@@ -471,12 +471,12 @@ void QueuePositionSimple::try_match(Side side, Callback callback) {
       assert(false);
       log::fatal("Unexpected"sv);
     case BUY: {
-      auto compare = [](auto lhs, auto rhs) { return lhs > rhs; };
+      auto compare = [](auto lhs, auto rhs) { return lhs >= rhs; };
       try_match_helper(sell_orders_, compare, top_of_book_.internal.bid_price, order_cache_, callback);
       break;
     }
     case SELL: {
-      auto compare = [](auto lhs, auto rhs) { return lhs < rhs; };
+      auto compare = [](auto lhs, auto rhs) { return lhs <= rhs; };
       try_match_helper(buy_orders_, compare, top_of_book_.internal.ask_price, order_cache_, callback);
       break;
     }
