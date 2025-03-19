@@ -262,6 +262,7 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
       order.last_traded_quantity = fill.quantity;
       order.last_traded_price = fill.price;
       order.last_liquidity = fill.liquidity;
+      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
       dispatch_order_update(message_info, order);
       dispatch_trade_update(message_info, order, fill);
     } else {
@@ -498,12 +499,12 @@ void Simple::try_match(Side side, Callback callback) {
       assert(false);
       log::fatal("Unexpected"sv);
     case BUY: {
-      auto compare = [](auto lhs, auto rhs) { return lhs >= rhs; };
+      auto compare = [](auto order, auto market) { return order <= market; };
       try_match_helper(sell_orders_, compare, top_of_book_.internal.first, order_cache_, callback);
       break;
     }
     case SELL: {
-      auto compare = [](auto lhs, auto rhs) { return lhs <= rhs; };
+      auto compare = [](auto order, auto market) { return order >= market; };
       try_match_helper(buy_orders_, compare, top_of_book_.internal.second, order_cache_, callback);
       break;
     }

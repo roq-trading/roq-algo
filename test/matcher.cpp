@@ -325,7 +325,7 @@ struct Helper final {
 
 // === IMPLEMENTATION ===
 
-TEST_CASE("algo_matcher_simple", "[algo_matcher]") {
+TEST_CASE("algo_matcher_simple_1", "[algo_matcher]") {
   Dispatcher dispatcher;
   OrderCache order_cache;
   auto config = algo::matcher::Config{
@@ -347,7 +347,58 @@ TEST_CASE("algo_matcher_simple", "[algo_matcher]") {
   // t=1
   Helper{state}.reference_data(0.1, 1.0);
   // t=2
-  Helper{state}.top_of_book(100.0, 1.0, 101.0, 1.0);
+  Helper{state}.top_of_book(100.0, 1.0, 102.0, 1.0);
+  // t=3
+  auto order_id = Helper{
+      state,
+      [&](auto &order_ack) { CHECK(order_ack.request_status == RequestStatus::ACCEPTED); },
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::COMPLETED);
+        CHECK(order_update.remaining_quantity == 0.0_a);
+        CHECK(order_update.traded_quantity == 1.0_a);
+        CHECK(order_update.average_traded_price == 102.0_a);
+      },
+      [&](auto &trade_update) {
+        CHECK(trade_update.side == Side::BUY);
+        REQUIRE(!std::empty(trade_update.fills));
+        for (auto &item : trade_update.fills) {
+          CHECK(item.quantity > 0.0);
+          CHECK(item.price == 102.0_a);
+          CHECK(item.liquidity == Liquidity::TAKER);
+        }
+      }}.create_order(Side::BUY, OrderType::LIMIT, TimeInForce::GTC, 1.0, 104.0);
+  REQUIRE(order_id > 0);
+  REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
+    CHECK(order.order_status == OrderStatus::COMPLETED);
+    CHECK(order.remaining_quantity == 0.0_a);
+    CHECK(order.traded_quantity == 1.0_a);
+    CHECK(order.average_traded_price == 102.0_a);
+  }));
+}
+
+TEST_CASE("algo_matcher_simple_2", "[algo_matcher]") {
+  Dispatcher dispatcher;
+  OrderCache order_cache;
+  auto config = algo::matcher::Config{
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+      .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
+  };
+  auto matcher = algo::matcher::Factory::create(algo::matcher::Type::SIMPLE, dispatcher, order_cache, config);
+  auto state = State2{
+      .dispatcher = dispatcher,
+      .order_cache = order_cache,
+      .matcher = *matcher,
+      .source_name = SOURCE_NAME,
+      .account = ACCOUNT,
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+  };
+  // ---
+  // t=1
+  Helper{state}.reference_data(0.1, 1.0);
+  // t=2
+  Helper{state}.top_of_book(100.0, 1.0, 102.0, 1.0);
   // t=3
   auto order_id = Helper{
       state,
@@ -360,7 +411,6 @@ TEST_CASE("algo_matcher_simple", "[algo_matcher]") {
       },
       {}}.create_order(Side::BUY, OrderType::LIMIT, TimeInForce::GTC, 1.0, 100.0);
   REQUIRE(order_id > 0);
-  // ...
   REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
     CHECK(order.order_status == OrderStatus::WORKING);
     CHECK(order.remaining_quantity == 1.0_a);
@@ -382,34 +432,158 @@ TEST_CASE("algo_matcher_simple", "[algo_matcher]") {
         for (auto &item : trade_update.fills) {
           CHECK(item.quantity > 0.0);
           CHECK(item.price == 100.0_a);
+          CHECK(item.liquidity == Liquidity::MAKER);
         }
       }}
-      .top_of_book(99.0, 1.0, 100.0, 1.0);
+      .top_of_book(98.0, 1.0, 100.0, 1.0);
   REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
     CHECK(order.order_status == OrderStatus::COMPLETED);
     CHECK(order.remaining_quantity == 0.0_a);
     CHECK(order.traded_quantity == 1.0_a);
     CHECK(order.average_traded_price == 100.0_a);
   }));
+}
+
+TEST_CASE("algo_matcher_modify_1", "[algo_matcher]") {
+  Dispatcher dispatcher;
+  OrderCache order_cache;
+  auto config = algo::matcher::Config{
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+      .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
+  };
+  auto matcher = algo::matcher::Factory::create(algo::matcher::Type::SIMPLE, dispatcher, order_cache, config);
+  auto state = State2{
+      .dispatcher = dispatcher,
+      .order_cache = order_cache,
+      .matcher = *matcher,
+      .source_name = SOURCE_NAME,
+      .account = ACCOUNT,
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+  };
+  // ---
+  // t=1
+  Helper{state}.reference_data(0.1, 1.0);
+  // t=2
+  Helper{state}.top_of_book(100.0, 1.0, 102.0, 1.0);
+  // t=3
+  auto order_id = Helper{
+      state,
+      [&](auto &order_ack) { CHECK(order_ack.request_status == RequestStatus::ACCEPTED); },
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::WORKING);
+        CHECK(order_update.remaining_quantity == 1.0_a);
+        CHECK(order_update.traded_quantity == 0.0_a);
+        CHECK(std::isnan(order_update.average_traded_price));
+      },
+      {}}.create_order(Side::BUY, OrderType::LIMIT, TimeInForce::GTC, 1.0, 100.0);
+  REQUIRE(order_id > 0);
+  REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
+    CHECK(order.order_status == OrderStatus::WORKING);
+    CHECK(order.remaining_quantity == 1.0_a);
+    CHECK(order.traded_quantity == 0.0_a);
+    CHECK(std::isnan(order.average_traded_price));
+  }));
+  // t=4
+  Helper{
+      state,
+      [&](auto &order_ack) { CHECK(order_ack.request_status == RequestStatus::ACCEPTED); },
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::COMPLETED);
+        CHECK(order_update.remaining_quantity == 0.0_a);
+        CHECK(order_update.traded_quantity == 1.0_a);
+        CHECK(order_update.average_traded_price == 102.0_a);
+      },
+      [&](auto &trade_update) {
+        CHECK(trade_update.side == Side::BUY);
+        REQUIRE(!std::empty(trade_update.fills));
+        for (auto &item : trade_update.fills) {
+          CHECK(item.quantity > 0.0);
+          CHECK(item.price == 102.0_a);
+          CHECK(item.liquidity == Liquidity::TAKER);
+        }
+      }}
+      .modify_order(order_id, NaN, 102.0);
+}
+
+TEST_CASE("algo_matcher_modify_2", "[algo_matcher]") {
+  Dispatcher dispatcher;
+  OrderCache order_cache;
+  auto config = algo::matcher::Config{
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+      .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
+  };
+  auto matcher = algo::matcher::Factory::create(algo::matcher::Type::SIMPLE, dispatcher, order_cache, config);
+  auto state = State2{
+      .dispatcher = dispatcher,
+      .order_cache = order_cache,
+      .matcher = *matcher,
+      .source_name = SOURCE_NAME,
+      .account = ACCOUNT,
+      .exchange = EXCHANGE,
+      .symbol = SYMBOL,
+  };
+  // ---
+  // t=1
+  Helper{state}.reference_data(0.1, 1.0);
+  // t=2
+  Helper{state}.top_of_book(100.0, 1.0, 102.0, 1.0);
+  // t=3
+  auto order_id = Helper{
+      state,
+      [&](auto &order_ack) { CHECK(order_ack.request_status == RequestStatus::ACCEPTED); },
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::WORKING);
+        CHECK(order_update.remaining_quantity == 1.0_a);
+        CHECK(order_update.traded_quantity == 0.0_a);
+        CHECK(std::isnan(order_update.average_traded_price));
+      },
+      {}}.create_order(Side::BUY, OrderType::LIMIT, TimeInForce::GTC, 1.0, 100.0);
+  REQUIRE(order_id > 0);
+  REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
+    CHECK(order.order_status == OrderStatus::WORKING);
+    CHECK(order.remaining_quantity == 1.0_a);
+    CHECK(order.traded_quantity == 0.0_a);
+    CHECK(std::isnan(order.average_traded_price));
+  }));
+  // t=4
+  Helper{
+      state,
+      [&](auto &order_ack) { CHECK(order_ack.request_status == RequestStatus::ACCEPTED); },
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::WORKING);
+        CHECK(order_update.price == 101.0_a);
+        CHECK(order_update.remaining_quantity == 1.0_a);
+        CHECK(order_update.traded_quantity == 0.0_a);
+        CHECK(std::isnan(order_update.average_traded_price));
+      },
+      {}}
+      .modify_order(order_id, NaN, 101.0);
   // t=5
   Helper{
       state,
-      [&](auto &order_ack) {
-        CHECK(order_ack.request_status == RequestStatus::REJECTED);
-        CHECK(order_ack.error == Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
+      [&](auto &order_update) {
+        CHECK(order_update.order_status == OrderStatus::COMPLETED);
+        CHECK(order_update.remaining_quantity == 0.0_a);
+        CHECK(order_update.traded_quantity == 1.0_a);
+        CHECK(order_update.average_traded_price == 101.0_a);
       },
-      {},
-      {}}
-      .modify_order(order_id, NaN, 101.0);
-  // t=6
-  Helper{
-      state,
-      [&](auto &order_ack) {
-        CHECK(order_ack.request_status == RequestStatus::REJECTED);
-        CHECK(order_ack.error == Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
-      },
-      {},
-      {}}
-      .cancel_order(order_id);
-  // ---
+      [&](auto &trade_update) {
+        CHECK(trade_update.side == Side::BUY);
+        REQUIRE(!std::empty(trade_update.fills));
+        for (auto &item : trade_update.fills) {
+          CHECK(item.quantity > 0.0);
+          CHECK(item.price == 101.0_a);
+          CHECK(item.liquidity == Liquidity::MAKER);
+        }
+      }}
+      .top_of_book(98.0, 1.0, 100.0, 1.0);
+  REQUIRE(state.order_cache.find(order_id, [&](auto &order) {
+    CHECK(order.order_status == OrderStatus::COMPLETED);
+    CHECK(order.remaining_quantity == 0.0_a);
+    CHECK(order.traded_quantity == 1.0_a);
+    CHECK(order.average_traded_price == 101.0_a);
+  }));
 }
