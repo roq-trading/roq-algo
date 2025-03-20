@@ -6,6 +6,8 @@
 
 #include "roq/utils/compare.hpp"
 
+#include "roq/utils/regex/utils.hpp"
+
 using namespace std::literals;
 
 namespace roq {
@@ -36,8 +38,11 @@ auto create_instruments(auto &config, auto &parameters) {
   assert(size >= 2);
   if (size < 2)
     log::fatal("Unexpected: len(config.legs)={}"sv, size);
-  for (auto &item : config.legs)
+  for (auto &item : config.legs) {
+    if (utils::regex::is_pattern(item.symbol))
+      log::fatal("Unexpected: symbol regex pattern not allowed"sv);
     result.emplace_back(item, parameters.market_data_source);
+  }
   return result;
 }
 
