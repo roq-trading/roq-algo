@@ -4,6 +4,8 @@ All notable changes will be documented in this file.
 
 ## Head
 
+## 1.0.5 &ndash; 2025-03-26
+
 ### Changed
 
 * Access some reference data from `tools::MarketData` (#1)
