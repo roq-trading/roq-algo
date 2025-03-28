@@ -46,7 +46,6 @@ struct fmt::formatter<roq::algo::Leg> {
         R"(tick_size={}, )"
         R"(multiplier={}, )"
         R"(min_trade_vol={}, )"
-        R"(order_management={{)"
         R"(position_effect={}, )"
         R"(margin_mode={}, )"
         R"(time_in_force={})"
