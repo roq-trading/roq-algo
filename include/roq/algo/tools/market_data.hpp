@@ -16,6 +16,7 @@
 #include "roq/cache/market_status.hpp"
 #include "roq/cache/top_of_book.hpp"
 
+#include "roq/algo/leg.hpp"
 #include "roq/algo/market_data_source.hpp"
 
 namespace roq {
@@ -24,6 +25,7 @@ namespace tools {
 
 struct ROQ_PUBLIC MarketData final {
   MarketData(std::string_view const &exchange, std::string_view const &symbol, MarketDataSource);
+  MarketData(Leg const &, MarketDataSource);
 
   MarketData(MarketData &&) = default;
   MarketData(MarketData const &) = delete;

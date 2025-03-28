@@ -18,6 +18,11 @@ struct ROQ_PUBLIC Leg final {
   Account account;
   Exchange exchange;
   Symbol symbol;
+  // reference data
+  double tick_size = NaN;
+  double multiplier = NaN;
+  double min_trade_vol = NaN;
+  // order management
   PositionEffect position_effect = {};
   MarginMode margin_mode = {};
   TimeInForce time_in_force = {};
@@ -38,6 +43,10 @@ struct fmt::formatter<roq::algo::Leg> {
         R"(account="{}", )"
         R"(exchange="{}", )"
         R"(symbol="{}", )"
+        R"(tick_size={}, )"
+        R"(multiplier={}, )"
+        R"(min_trade_vol={}, )"
+        R"(order_management={{)"
         R"(position_effect={}, )"
         R"(margin_mode={}, )"
         R"(time_in_force={})"
@@ -46,6 +55,9 @@ struct fmt::formatter<roq::algo::Leg> {
         value.account,
         value.exchange,
         value.symbol,
+        value.tick_size,
+        value.multiplier,
+        value.min_trade_vol,
         value.position_effect,
         value.margin_mode,
         value.time_in_force);

@@ -25,6 +25,9 @@ void parse_legs(auto &legs, auto &node) {
     ACCOUNT,
     EXCHANGE,
     SYMBOL,
+    TICK_SIZE,
+    MULTIPLIER,
+    MIN_TRADE_VOL,
     POSITION_EFFECT,
     MARGIN_MODE,
     TIME_IN_FORCE,
@@ -47,6 +50,15 @@ void parse_legs(auto &legs, auto &node) {
           break;
         case Key::SYMBOL:
           leg.symbol = value.template value<std::string_view>().value();
+          break;
+        case Key::TICK_SIZE:
+          leg.tick_size = value.template value<double>().value();
+          break;
+        case Key::MULTIPLIER:
+          leg.multiplier = value.template value<double>().value();
+          break;
+        case Key::MIN_TRADE_VOL:
+          leg.min_trade_vol = value.template value<double>().value();
           break;
         case Key::POSITION_EFFECT: {
           auto tmp = value.template value<std::string_view>().value();

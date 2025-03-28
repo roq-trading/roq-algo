@@ -45,6 +45,11 @@ MarketData::MarketData(std::string_view const &exchange, std::string_view const 
       market_by_order_{create_market_by_order(exchange, symbol)} {
 }
 
+MarketData::MarketData(Leg const &leg, MarketDataSource market_data_source)
+    : market_data_source_{market_data_source}, tick_size_{leg.tick_size}, multiplier_{leg.multiplier}, min_trade_vol_{leg.min_trade_vol},
+      market_by_price_{create_market_by_price(leg.exchange, leg.symbol)}, market_by_order_{create_market_by_order(leg.exchange, leg.symbol)} {
+}
+
 bool MarketData::is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
   if (market_status_.trading_status != TradingStatus{})
     return market_status_.trading_status == TradingStatus::OPEN;

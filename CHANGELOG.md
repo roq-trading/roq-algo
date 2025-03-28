@@ -4,6 +4,10 @@ All notable changes will be documented in this file.
 
 ## Head
 
+### Added
+
+* Initialize (some) reference data from TOML (#7)
+
 ## 1.0.5 &ndash; 2025-03-26
 
 ### Changed
