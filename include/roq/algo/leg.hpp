@@ -6,7 +6,7 @@
 
 #include <string_view>
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 
 #include "roq/api.hpp"
 
