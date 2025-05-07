@@ -11,6 +11,11 @@
 #include <memory>
 #include <string_view>
 
+#include "roq/reference_data.hpp"
+#include "roq/statistics_update.hpp"
+#include "roq/top_of_book.hpp"
+#include "roq/trade_summary.hpp"
+
 #include "roq/cache/market_by_order.hpp"
 #include "roq/cache/market_by_price.hpp"
 #include "roq/cache/market_status.hpp"

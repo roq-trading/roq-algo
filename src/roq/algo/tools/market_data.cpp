@@ -51,8 +51,9 @@ MarketData::MarketData(Leg const &leg, MarketDataSource market_data_source)
 }
 
 bool MarketData::is_market_active(MessageInfo const &message_info, std::chrono::nanoseconds max_age) const {
-  if (market_status_.trading_status != TradingStatus{})
+  if (market_status_.trading_status != TradingStatus{}) {
     return market_status_.trading_status == TradingStatus::OPEN;
+  }
   // use age of market data update as fallback if exchange doesn't support trading status
   return (message_info.receive_time_utc - exchange_time_utc_) < max_age;
 }
@@ -85,8 +86,9 @@ bool MarketData::operator()(Event<ReferenceData> const &event) {
   if (utils::update(tick_size_, event.value.tick_size)) {
     result = true;
     auto precision = market::increment_to_precision(tick_size_);
-    if (static_cast<std::underlying_type<decltype(precision)>::type>(precision) < static_cast<std::underlying_type<decltype(precision_)>::type>(precision_))
+    if (static_cast<std::underlying_type_t<decltype(precision)>>(precision) < static_cast<std::underlying_type_t<decltype(precision_)>>(precision_)) {
       log::fatal("Unexpected"sv);  // note! we can't support loss of precision
+    }
     // XXX FIXME internal prices must now be scaled relatively...
     precision_ = precision;
   }
@@ -102,10 +104,12 @@ bool MarketData::operator()(Event<MarketStatus> const &event) {
 
 bool MarketData::operator()(Event<TopOfBook> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
-  if (!top_of_book_(event))
+  if (!top_of_book_(event)) {
     return false;
-  if (market_data_source_ != MarketDataSource::TOP_OF_BOOK)
+  }
+  if (market_data_source_ != MarketDataSource::TOP_OF_BOOK) {
     return false;
+  }
   best_ = top_of_book_.layer;
   return true;
 }
@@ -113,8 +117,9 @@ bool MarketData::operator()(Event<TopOfBook> const &event) {
 bool MarketData::operator()(Event<MarketByPriceUpdate> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   (*market_by_price_)(event);
-  if (market_data_source_ != MarketDataSource::MARKET_BY_PRICE)
+  if (market_data_source_ != MarketDataSource::MARKET_BY_PRICE) {
     return false;
+  }
   (*market_by_price_).extract({&best_, 1}, true);
   return true;
 }
@@ -122,8 +127,9 @@ bool MarketData::operator()(Event<MarketByPriceUpdate> const &event) {
 bool MarketData::operator()(Event<MarketByOrderUpdate> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   (*market_by_order_)(event);
-  if (market_data_source_ != MarketDataSource::MARKET_BY_ORDER)
+  if (market_data_source_ != MarketDataSource::MARKET_BY_ORDER) {
     return false;
+  }
   (*market_by_order_).extract_2({&best_, 1});
   return true;
 }

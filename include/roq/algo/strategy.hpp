@@ -33,7 +33,7 @@ struct ROQ_PUBLIC Strategy {
     virtual void send(CustomMatrix const &, uint8_t source) = 0;
   };
 
-  virtual ~Strategy() {}
+  virtual ~Strategy() = default;
 
   // host
   virtual void operator()(Event<Start> const &) {}

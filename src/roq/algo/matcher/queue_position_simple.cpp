@@ -24,27 +24,32 @@ namespace matcher {
 namespace {
 // note! priority is preserved by first ordering by price (internal) and then by order_id
 auto compare_buy_orders = [](auto &lhs, auto &rhs) {
-  if (lhs.price > rhs.price)
+  if (lhs.price > rhs.price) {
     return true;
-  if (lhs.price == rhs.price)
+  }
+  if (lhs.price == rhs.price) {
     return lhs.order_id < rhs.order_id;
+  }
   return false;
 };
 
 // note! priority is preserved by first ordering by price (internal) and then by order_id
 auto compare_sell_orders = [](auto &lhs, auto &rhs) {
-  if (lhs.price < rhs.price)
+  if (lhs.price < rhs.price) {
     return true;
-  if (lhs.price == rhs.price)
+  }
+  if (lhs.price == rhs.price) {
     return lhs.order_id < rhs.order_id;
+  }
   return false;
 };
 
 void add_order_helper(auto &container, auto &&order, auto compare) {
   auto iter = std::lower_bound(std::begin(container), std::end(container), order, compare);
   if (iter != std::end(container)) {
-    if ((*iter).price == order.price && (*iter).order_id == order.order_id) [[unlikely]]
+    if ((*iter).price == order.price && (*iter).order_id == order.order_id) [[unlikely]] {
       log::fatal("Unexpected: internal error"sv);  // duplicate
+    }
     container.insert(iter, order);
   } else {
     container.emplace_back(std::move(order));
@@ -53,8 +58,9 @@ void add_order_helper(auto &container, auto &&order, auto compare) {
 
 auto remove_order_helper(auto &container, auto &order, auto compare) {
   auto iter = std::lower_bound(std::begin(container), std::end(container), order, compare);
-  if (iter == std::end(container) || (*iter).price != order.price || (*iter).order_id != order.order_id)
+  if (iter == std::end(container) || (*iter).price != order.price || (*iter).order_id != order.order_id) {
     return false;
+  }
   container.erase(iter);
   return true;
 }
@@ -79,8 +85,9 @@ void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cac
 
 QueuePositionSimple::QueuePositionSimple(Dispatcher &dispatcher, OrderCache &order_cache, Config const &config)
     : dispatcher_{dispatcher}, order_cache_{order_cache}, market_data_{config.exchange, config.symbol, config.market_data_source} {
-  if (config.market_data_source == MarketDataSource::TOP_OF_BOOK)
+  if (config.market_data_source == MarketDataSource::TOP_OF_BOOK) {
     throw RuntimeError{"Unsupported: market_data_source={}"sv, config.market_data_source};
+  }
 }
 
 // note! the following handlers **must** dispatch market data and **may** potentially overlay own orders and fills
@@ -100,8 +107,9 @@ void QueuePositionSimple::operator()(Event<MarketStatus> const &event) {
 void QueuePositionSimple::operator()(Event<TopOfBook> const &event) {
   check(event);
   dispatcher_(event);  // note!
-  if (market_data_(event))
+  if (market_data_(event)) {
     match_resting_orders(event);
+  }
 }
 
 void QueuePositionSimple::operator()(Event<MarketByPriceUpdate> const &event) {
@@ -117,15 +125,17 @@ void QueuePositionSimple::operator()(Event<MarketByPriceUpdate> const &event) {
 void QueuePositionSimple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
   dispatcher_(event);  // note!
-  if (market_data_(event))
+  if (market_data_(event)) {
     match_resting_orders(event);
+  }
 }
 
 void QueuePositionSimple::operator()(Event<TradeSummary> const &event) {
   check(event);
   dispatcher_(event);  // note!
-  if (market_data_(event))
+  if (market_data_(event)) {
     match_resting_orders_2(event);
+  }
 }
 
 void QueuePositionSimple::operator()(Event<StatisticsUpdate> const &event) {
@@ -139,16 +149,21 @@ void QueuePositionSimple::operator()(Event<CreateOrder> const &event, cache::Ord
   auto &[message_info, create_order] = event;
   auto validate = [&]() -> Error {
     // note! simulator will already have validated the request and here we just need to validate based on what is supported here
-    if (create_order.quantity_type != QuantityType{})
+    if (create_order.quantity_type != QuantityType{}) {
       return Error::INVALID_QUANTITY_TYPE;
-    if (create_order.order_type != OrderType::LIMIT)
+    }
+    if (create_order.order_type != OrderType::LIMIT) {
       return Error::INVALID_ORDER_TYPE;
-    if (create_order.time_in_force != TimeInForce::GTC)
+    }
+    if (create_order.time_in_force != TimeInForce::GTC) {
       return Error::INVALID_TIME_IN_FORCE;
-    if (create_order.execution_instructions != Mask<ExecutionInstruction>{})
+    }
+    if (create_order.execution_instructions != Mask<ExecutionInstruction>{}) {
       return Error::INVALID_EXECUTION_INSTRUCTION;
-    if (!std::isnan(create_order.stop_price))
+    }
+    if (!std::isnan(create_order.stop_price)) {
       return Error::INVALID_STOP_PRICE;
+    }
     return {};
   };
   if (auto error = validate(); error != Error{}) {
@@ -156,8 +171,9 @@ void QueuePositionSimple::operator()(Event<CreateOrder> const &event, cache::Ord
   } else {
     dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
     auto [price, overflow] = market_data_.price_to_ticks(create_order.price);
-    if (overflow) [[unlikely]]
+    if (overflow) [[unlikely]] {
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    }
     if (is_aggressive(create_order.side, price)) {
       auto matched_price = [&]() -> double {
         switch (create_order.side) {
@@ -221,8 +237,9 @@ void QueuePositionSimple::operator()(Event<CancelOrder> const &event, cache::Ord
     dispatch_order_ack(event, order, Error::TOO_LATE_TO_MODIFY_OR_CANCEL);
   } else {
     auto [price, overflow] = market_data_.price_to_ticks(order.price);
-    if (overflow) [[unlikely]]
+    if (overflow) [[unlikely]] {
       log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+    }
     if (remove_order(order.order_id, order.side, price)) {
       order.update_time_utc = market_data_.exchange_time_utc();
       order.order_status = OrderStatus::CANCELED;
@@ -257,8 +274,9 @@ void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) 
   auto convert = [this](auto price, auto default_value) {
     if (!std::isnan(price)) {
       auto [units, overflow] = market_data_.price_to_ticks(price);
-      if (!overflow)
+      if (!overflow) {
         return units;
+      }
     }
     return default_value;
   };
@@ -331,15 +349,18 @@ template <typename T>
 void QueuePositionSimple::dispatch_order_ack(Event<T> const &event, cache::Order const &order, Error error, RequestStatus request_status) {
   auto &[message_info, value] = event;
   auto get_request_status = [&]() {
-    if (request_status != RequestStatus{})
+    if (request_status != RequestStatus{}) {
       return request_status;
-    if (error != Error{})
+    }
+    if (error != Error{}) {
       return RequestStatus::REJECTED;
+    }
     return RequestStatus::ACCEPTED;
   };
   auto get_text = [&]() -> std::string_view {
-    if (error != Error{})
+    if (error != Error{}) {
       return magic_enum::enum_name(error);
+    }
     return {};
   };
   auto order_ack = OrderAck{
@@ -375,9 +396,10 @@ void QueuePositionSimple::dispatch_order_ack(Event<T> const &event, cache::Order
 }
 
 void QueuePositionSimple::dispatch_order_update(MessageInfo const &message_info, cache::Order &order) {
-  if (!order.create_time_utc.count())
+  if (!order.create_time_utc.count()) {
     order.create_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy create time (not exchange time)
-  order.update_time_utc = market_data_.exchange_time_utc();    // XXX FIXME TODO this is strategy receive time (not exchange time)
+  }
+  order.update_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy receive time (not exchange time)
   auto order_update = static_cast<OrderUpdate>(order);
   order_update.sending_time_utc = market_data_.exchange_time_utc();
   order_update.update_type = UpdateType::INCREMENTAL;

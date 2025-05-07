@@ -9,8 +9,10 @@
 #include <fmt/ranges.h>
 
 #include <chrono>
+#include <climits>
 
-#include "roq/api.hpp"
+#include "roq/limits.hpp"
+#include "roq/string_types.hpp"
 
 #include "roq/utils/container.hpp"
 

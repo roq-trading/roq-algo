@@ -6,9 +6,11 @@
 
 #include <fmt/format.h>
 
+#include <tuple>
 #include <utility>
 
-#include "roq/api.hpp"
+#include "roq/position_update.hpp"
+#include "roq/trade_update.hpp"
 
 namespace roq {
 namespace algo {

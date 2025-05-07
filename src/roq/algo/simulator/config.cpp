@@ -46,10 +46,12 @@ void parse_position(auto &account, auto &node) {
         break;
     }
   }
-  if (std::empty(exchange) || std::empty(symbol))
+  if (std::empty(exchange) || std::empty(symbol)) {
     throw RuntimeError{"Both 'exchange' and 'symbol' required"sv};
-  if (std::isnan(position.long_position) && std::isnan(position.short_position))
+  }
+  if (std::isnan(position.long_position) && std::isnan(position.short_position)) {
     throw RuntimeError{"At least one of 'long_position' and 'short_position' required"sv};
+  }
   account.exchanges[exchange].symbols[symbol].position = std::move(position);
 }
 
@@ -58,8 +60,9 @@ void parse_accounts(auto &accounts, auto &node) {
   for (auto &[key, value] : *table) {
     auto &account = accounts[std::string{key}];
     auto arr = value.as_array();
-    for (auto &node_2 : *arr)
+    for (auto &node_2 : *arr) {
       parse_position(account, node_2);
+    }
   }
 }
 

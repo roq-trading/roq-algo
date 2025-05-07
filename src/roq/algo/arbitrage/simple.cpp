@@ -32,15 +32,17 @@ auto create_market_data_type(auto &config) -> SupportType {
 
 template <typename R>
 auto create_instruments(auto &config, auto &parameters) {
-  using result_type = std::remove_cvref<R>::type;
+  using result_type = std::remove_cvref_t<R>;
   result_type result;
   auto size = std::size(config.legs);
   assert(size >= 2);
-  if (size < 2)
+  if (size < 2) {
     log::fatal("Unexpected: len(config.legs)={}"sv, size);
+  }
   for (auto &item : config.legs) {
-    if (utils::regex::is_pattern(item.symbol))
+    if (utils::regex::is_pattern(item.symbol)) {
       log::fatal("Unexpected: symbol regex pattern not allowed"sv);
+    }
     result.emplace_back(item, parameters.market_data_source);
   }
   return result;
@@ -48,24 +50,25 @@ auto create_instruments(auto &config, auto &parameters) {
 
 template <typename R>
 auto create_sources(auto &instruments) {
-  using result_type = std::remove_cvref<R>::type;
+  using result_type = std::remove_cvref_t<R>;
   result_type result;
   auto max_source = [&]() {
     size_t result = {};
-    for (auto &item : instruments)
+    for (auto &item : instruments) {
       result = std::max<size_t>(result, item.source);
+    }
     return result;
   }();
   auto size = max_source + 1;
   // accounts
-  using accounts_type = std::remove_cvref<decltype(result_type::value_type::accounts)>::type;
+  using accounts_type = std::remove_cvref_t<decltype(result_type::value_type::accounts)>;
   std::vector<accounts_type> tmp_1(size);
   for (size_t i = 0; i < std::size(instruments); ++i) {
     auto &item = instruments[i];
     tmp_1[item.source].try_emplace(item.account);
   }
   // instruments
-  using instruments_type = std::remove_cvref<decltype(result_type::value_type::instruments)>::type;
+  using instruments_type = std::remove_cvref_t<decltype(result_type::value_type::instruments)>;
   std::vector<instruments_type> tmp_2(size);
   for (size_t i = 0; i < std::size(instruments); ++i) {
     auto &item = instruments[i];
@@ -111,8 +114,9 @@ void Simple::operator()(Event<Disconnected> const &event) {
   log::info("[{}:{}] disconnected"sv, message_info.source, message_info.source_name);
   auto &source = sources_[message_info.source];
   source.ready = false;
-  for (auto &[name, account] : source.accounts)
+  for (auto &[name, account] : source.accounts) {
     account.has_download_orders = {};
+  }
   auto callback = [&](auto &instrument) { instrument(event); };
   get_instruments_by_source(event, callback);
   // XXX TODO maybe cancel working orders on other sources?
@@ -122,8 +126,9 @@ void Simple::operator()(Event<DownloadEnd> const &event) {
   check(event);
   auto &[message_info, download_end] = event;
   auto &source = sources_[message_info.source];
-  if (source.accounts.find(download_end.account) != std::end(source.accounts))
+  if (source.accounts.find(download_end.account) != std::end(source.accounts)) {
     max_order_id_ = std::max(download_end.max_order_id, max_order_id_);
+  }
 }
 
 void Simple::operator()(Event<Ready> const &event) {
@@ -132,7 +137,7 @@ void Simple::operator()(Event<Ready> const &event) {
   log::info("[{}:{}] ready"sv, message_info.source, message_info.source_name);
   auto &source = sources_[message_info.source];
   source.ready = true;
-  for (auto &[name, account] : source.accounts)
+  for (auto &[name, account] : source.accounts) {
     if (account.has_download_orders) {
       // XXX FIXME TODO cancel by instrument
       auto cancel_all_orders = CancelAllOrders{
@@ -150,6 +155,7 @@ void Simple::operator()(Event<Ready> const &event) {
       }
       account.has_download_orders = false;  // note! don't bother waiting for the ack
     }
+  }
 }
 
 void Simple::operator()(Event<StreamStatus> const &event) {
@@ -193,8 +199,9 @@ void Simple::operator()(Event<ReferenceData> const &event) {
 void Simple::operator()(Event<MarketStatus> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    if (instrument(event))
+    if (instrument(event)) {
       update(event);
+    }
   };
   get_instrument(event, callback);
 }
@@ -202,8 +209,9 @@ void Simple::operator()(Event<MarketStatus> const &event) {
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    if (instrument(event))
+    if (instrument(event)) {
       update(event);
+    }
   };
   get_instrument(event, callback);
 }
@@ -211,8 +219,9 @@ void Simple::operator()(Event<TopOfBook> const &event) {
 void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    if (instrument(event))
+    if (instrument(event)) {
       update(event);
+    }
   };
   get_instrument(event, callback);
 }
@@ -220,8 +229,9 @@ void Simple::operator()(Event<MarketByPriceUpdate> const &event) {
 void Simple::operator()(Event<MarketByOrderUpdate> const &event) {
   check(event);
   auto callback = [&](auto &instrument) {
-    if (instrument(event))
+    if (instrument(event)) {
       update(event);
+    }
   };
   get_instrument(event, callback);
 }
@@ -248,8 +258,9 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
         break;
     }
   };
-  if (!get_account_and_instrument(event, callback))
+  if (!get_account_and_instrument(event, callback)) {
     log::fatal("Unexepcted: order_ack={}"sv, order_ack);
+  }
 }
 
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
@@ -341,29 +352,34 @@ void Simple::operator()(Event<PortfolioUpdate> const &event) {
 
 template <typename Callback>
 void Simple::get_instruments_by_source(MessageInfo const &message_info, Callback callback) {
-  if (message_info.source >= std::size(sources_)) [[unlikely]]
+  if (message_info.source >= std::size(sources_)) [[unlikely]] {
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  }
   auto &source = sources_[message_info.source];
-  for (auto &[exchange, tmp] : source.instruments)
+  for (auto &[exchange, tmp] : source.instruments) {
     for (auto &[symbol, index] : tmp) {
       auto &instrument = instruments_[index];
       callback(instrument);
     }
+  }
 }
 
 template <typename T, typename Callback>
 bool Simple::get_instrument(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
-  if (message_info.source >= std::size(sources_)) [[unlikely]]
+  if (message_info.source >= std::size(sources_)) [[unlikely]] {
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  }
   auto &source = sources_[message_info.source];
   auto iter_1 = source.instruments.find(value.exchange);
-  if (iter_1 == std::end(source.instruments))
+  if (iter_1 == std::end(source.instruments)) {
     return false;
+  }
   auto &tmp = (*iter_1).second;
   auto iter_2 = tmp.find(value.symbol);
-  if (iter_2 == std::end(tmp))
+  if (iter_2 == std::end(tmp)) {
     return false;
+  }
   auto &instrument = instruments_[(*iter_2).second];
   callback(instrument);
   return true;
@@ -372,20 +388,24 @@ bool Simple::get_instrument(Event<T> const &event, Callback callback) {
 template <typename T, typename Callback>
 bool Simple::get_account_and_instrument(Event<T> const &event, Callback callback) {
   auto &[message_info, value] = event;
-  if (message_info.source >= std::size(sources_)) [[unlikely]]
+  if (message_info.source >= std::size(sources_)) [[unlikely]] {
     log::fatal(R"(Unexpected: source={})"sv, message_info.source);
+  }
   auto &source = sources_[message_info.source];
   auto iter_1 = source.accounts.find(value.account);
-  if (iter_1 == std::end(source.accounts))
+  if (iter_1 == std::end(source.accounts)) {
     return false;
+  }
   auto &account = (*iter_1).second;
   auto iter_2 = source.instruments.find(value.exchange);
-  if (iter_2 == std::end(source.instruments))
+  if (iter_2 == std::end(source.instruments)) {
     return false;
+  }
   auto &tmp = (*iter_2).second;
   auto iter_3 = tmp.find(value.symbol);
-  if (iter_3 == std::end(tmp))
+  if (iter_3 == std::end(tmp)) {
     return false;
+  }
   auto &instrument = instruments_[(*iter_3).second];
   callback(account, instrument);
   return true;
@@ -395,10 +415,12 @@ template <typename T>
 void Simple::update_latency(std::chrono::nanoseconds &latency, Event<T> const &event) {
   auto &[message_info, value] = event;
   auto base = [&]() {
-    if (value.exchange_time_utc.count())
+    if (value.exchange_time_utc.count()) {
       return value.exchange_time_utc;
-    if (value.sending_time_utc.count())
+    }
+    if (value.sending_time_utc.count()) {
       return value.sending_time_utc;
+    }
     log::fatal("Unexpected: requires exchange_time_utc or sending_time_utc"sv);
   }();
   latency = message_info.receive_time_utc - base;
@@ -414,13 +436,15 @@ void Simple::update(MessageInfo const &message_info) {
     if (lhs.is_ready(message_info, max_age_)) {
       for (size_t j = i + 1; j < std::size(instruments_); ++j) {
         auto &rhs = instruments_[j];
-        if (rhs.is_ready(message_info, max_age_))
+        if (rhs.is_ready(message_info, max_age_)) {
           check_spread(message_info, lhs, rhs);
+        }
       }
     }
   }
-  for (auto &item : instruments_)
+  for (auto &item : instruments_) {
     publish_statistics(item);
+  }
 }
 
 void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Instrument &rhs) {
@@ -442,10 +466,12 @@ void Simple::check_spread(MessageInfo const &message_info, Instrument &lhs, Inst
       trigger_0,
       spread_1,
       trigger_1);
-  if (trigger_0)
+  if (trigger_0) {
     maybe_trade_spread(message_info, Side::SELL, lhs, rhs);
-  if (trigger_1)
+  }
+  if (trigger_1) {
     maybe_trade_spread(message_info, Side::BUY, lhs, rhs);
+  }
 }
 
 void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs, Instrument &rhs) {

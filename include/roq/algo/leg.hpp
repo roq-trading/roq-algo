@@ -4,11 +4,16 @@
 
 #include "roq/compat.hpp"
 
-#include <string_view>
-
 #include <fmt/format.h>
 
-#include "roq/api.hpp"
+#include <magic_enum/magic_enum_format.hpp>
+
+#include "roq/margin_mode.hpp"
+#include "roq/position_effect.hpp"
+#include "roq/time_in_force.hpp"
+
+#include "roq/limits.hpp"
+#include "roq/string_types.hpp"
 
 namespace roq {
 namespace algo {

@@ -9,7 +9,9 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 
-#include "roq/api.hpp"
+#include <magic_enum/magic_enum_format.hpp>
+
+#include "roq/limits.hpp"
 
 #include "roq/algo/market_data_source.hpp"
 

@@ -30,7 +30,7 @@ struct ROQ_PUBLIC Matcher {
     virtual void operator()(Event<CancelQuotesAck> const &) = 0;
   };
 
-  virtual ~Matcher() {}
+  virtual ~Matcher() = default;
 
   virtual void operator()(Event<ReferenceData> const &) = 0;
   virtual void operator()(Event<MarketStatus> const &) = 0;

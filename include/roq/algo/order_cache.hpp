@@ -11,8 +11,9 @@ struct ROQ_PUBLIC OrderCache {
   template <typename Callback>
   bool get_order(uint64_t order_id, Callback callback) {
     auto order = get_order_helper(order_id);
-    if (!order)
+    if (order == nullptr) {
       return false;
+    }
     callback(*order);
     return true;
   }

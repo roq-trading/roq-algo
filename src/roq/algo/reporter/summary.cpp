@@ -381,16 +381,18 @@ struct Implementation final : public Reporter {
     switch (output_type) {
       using enum OutputType;
       case TEXT:
-        if (!std::empty(label))
+        if (!std::empty(label)) {
           throw RuntimeError{R"(Unexpected: label="{}")"sv, label};
+        }
         print_text();
         break;
       case JSON:
         print_json(label);
         break;
       case CSV:
-        if (label != "history"sv)
+        if (label != "history"sv) {
           throw RuntimeError{R"(Unexpected: label="{}")"sv, label};
+        }
         print_csv_history();
         break;
     }
@@ -516,8 +518,9 @@ struct Implementation final : public Reporter {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.top_of_book.total_count;
-      if (instrument.market_data(event))
+      if (instrument.market_data(event)) {
         update_history(instrument);
+      }
     };
     get_instrument(event, callback);
   }
@@ -526,8 +529,9 @@ struct Implementation final : public Reporter {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_price_update.total_count;
-      if (instrument.market_data(event))
+      if (instrument.market_data(event)) {
         update_history(instrument);
+      }
     };
     get_instrument(event, callback);
   }
@@ -536,8 +540,9 @@ struct Implementation final : public Reporter {
     check(event);
     auto callback = [&](auto &instrument) {
       ++instrument.market_by_order_update.total_count;
-      if (instrument.market_data(event))
+      if (instrument.market_data(event)) {
         update_history(instrument);
+      }
     };
     get_instrument(event, callback);
   }
@@ -564,12 +569,15 @@ struct Implementation final : public Reporter {
     check(event);
     auto &[message_info, order_ack] = event;
     auto callback = [&](auto &instrument) {
-      if (order_ack.origin != Origin::EXCHANGE)
+      if (order_ack.origin != Origin::EXCHANGE) {
         return;
-      if (utils::has_request_completed(order_ack.request_status))
+      }
+      if (utils::has_request_completed(order_ack.request_status)) {
         ++instrument.order_ack.accepted_count;
-      if (utils::has_request_failed(order_ack.request_status))
+      }
+      if (utils::has_request_failed(order_ack.request_status)) {
         ++instrument.order_ack.rejected_count;
+      }
     };
     get_instrument(event, callback);
   }
@@ -599,8 +607,9 @@ struct Implementation final : public Reporter {
   void operator()(Event<TradeUpdate> const &event) override {
     check(event);
     auto callback = [&](auto &instrument) {
-      if (instrument(event))
+      if (instrument(event)) {
         update_history(instrument);
+      }
     };
     get_instrument(event, callback);
   }
@@ -608,8 +617,9 @@ struct Implementation final : public Reporter {
   void operator()(Event<PositionUpdate> const &event) override {
     check(event);
     auto callback = [&](auto &instrument) {
-      if (instrument(event))
+      if (instrument(event)) {
         update_history(instrument);
+      }
     };
     get_instrument(event, callback);
   }
@@ -652,10 +662,12 @@ struct Implementation final : public Reporter {
     assert(!std::isnan(position));
     auto &top_of_book = instrument.market_data.top_of_book();  // XXX FIXME TODO use impact price using std::fabs(position) !!!
     auto mark_price = [&]() -> double {
-      if (utils::compare(position, 0.0) == 0)
+      if (utils::compare(position, 0.0) == 0) {
         return NaN;
-      if (position > 0.0)
+      }
+      if (position > 0.0) {
         return top_of_book.bid_price;
+      }
       return top_of_book.ask_price;
     }();
     auto multiplier = 1.0;  // XXX FIXME TODO get from reference data
@@ -708,8 +720,9 @@ struct Implementation final : public Reporter {
     time_checker_(event);
     // sample period
     auto sample_period_utc = (message_info.receive_time_utc / sample_frequency_) * sample_frequency_;
-    if (sample_period_utc_ < sample_period_utc)
+    if (sample_period_utc_ < sample_period_utc) {
       sample_period_utc_ = sample_period_utc;
+    }
   }
 
  private:
