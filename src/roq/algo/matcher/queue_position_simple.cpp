@@ -70,8 +70,9 @@ void try_match_helper(auto &container, auto compare, auto top_of_book, auto &cac
   auto iter = std::begin(container);
   for (; iter != std::end(container); ++iter) {
     auto &order = *iter;
-    if (!compare(order.price, top_of_book))
+    if (!compare(order.price, top_of_book)) {
       break;
+    }
     if (cache.get_order(order.order_id, [&](auto &order) { callback(order); })) {
     } else {
       log::fatal("Unexpected: internal error"sv);
@@ -269,8 +270,9 @@ void QueuePositionSimple::operator()(Event<CancelQuotes> const &event) {
 // market
 
 void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) {
-  if (!market_data_.has_tick_size())
+  if (!market_data_.has_tick_size()) {
     return;
+  }
   auto convert = [this](auto price, auto default_value) {
     if (!std::isnan(price)) {
       auto [units, overflow] = market_data_.price_to_ticks(price);

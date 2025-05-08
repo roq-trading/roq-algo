@@ -119,8 +119,9 @@ auto parse_helper(auto &root) {
 // === IMPLEMENTATION ===
 
 Config Config::parse_file(std::string_view const &path) {
-  if (std::empty(path))
+  if (std::empty(path)) {
     return {};
+  }
   log::info(R"(Parse simulator config file path="{}")"sv, path);
   try {
     auto root = toml::parse_file(path);

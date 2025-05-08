@@ -34,14 +34,16 @@ struct OrderCache final : public algo::OrderCache {
   cache::Order &operator()(T const &value) {
     if constexpr (std::is_same<T, CreateOrder>::value) {
       auto iter = orders_.find(value.order_id);
-      if (iter != std::end(orders_))
+      if (iter != std::end(orders_)) {
         log::fatal("Unexpected"sv);
+      }
       iter = orders_.try_emplace(value.order_id, value).first;
       return (*iter).second;
     } else if constexpr (std::is_same<T, ModifyOrder>::value || std::is_same<T, CancelOrder>::value) {
       auto iter = orders_.find(value.order_id);
-      if (iter == std::end(orders_))
+      if (iter == std::end(orders_)) {
         log::fatal("Unexpected"sv);
+      }
       return (*iter).second;
     } else {
       static_assert(utils::always_false<T>, "not supported for this type");
@@ -51,8 +53,9 @@ struct OrderCache final : public algo::OrderCache {
   template <typename Callback>
   bool find(uint64_t order_id, Callback callback) {
     auto iter = orders_.find(order_id);
-    if (iter == std::end(orders_))
+    if (iter == std::end(orders_)) {
       return false;
+    }
     callback((*iter).second);
     return true;
   }
@@ -60,8 +63,9 @@ struct OrderCache final : public algo::OrderCache {
  protected:
   cache::Order *get_order_helper(uint64_t order_id) override {
     auto iter = orders_.find(order_id);
-    if (iter != std::end(orders_))
+    if (iter != std::end(orders_)) {
       return &(*iter).second;
+    }
     return nullptr;
   }
   uint64_t get_next_trade_id() override { return ++next_trade_id_; }
@@ -93,14 +97,18 @@ struct Dispatcher final : public algo::Matcher::Dispatcher {
   }
 
   bool empty() const {
-    if (!order_ack_ && !order_update_ && !trade_update_)
+    if (!order_ack_ && !order_update_ && !trade_update_) {
       return true;
-    if (order_ack_)
+    }
+    if (order_ack_) {
       log::error("MISSING: order_ack"sv);
-    if (order_update_)
+    }
+    if (order_update_) {
       log::error("MISSING: order_update"sv);
-    if (trade_update_)
+    }
+    if (trade_update_) {
       log::error("MISSING: trade_update"sv);
+    }
     return false;
   }
 
@@ -313,8 +321,9 @@ struct Helper final {
     } else {
       state_.matcher(event);
     }
-    if (std::empty(state_.dispatcher))
+    if (std::empty(state_.dispatcher)) {
       return;
+    }
     FAIL();
   };
 
