@@ -243,9 +243,18 @@ struct Implementation final : public Reporter {
 
   void dispatch_sample_history(Handler &handler) const {
     std::vector<uint8_t> source_2;
-    std::vector<std::string_view> exchange_2, symbol_2;
+    std::vector<std::string_view> exchange_2;
+    std::vector<std::string_view> symbol_2;
     std::vector<std::chrono::nanoseconds> sample_period_utc_2;
-    std::vector<double> best_bid_price, best_ask_price, buy_volume, sell_volume, position, average_price, mark_price, unrealized_profit, realized_profit;
+    std::vector<double> best_bid_price;
+    std::vector<double> best_ask_price;
+    std::vector<double> buy_volume;
+    std::vector<double> sell_volume;
+    std::vector<double> position;
+    std::vector<double> average_price;
+    std::vector<double> mark_price;
+    std::vector<double> unrealized_profit;
+    std::vector<double> realized_profit;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
@@ -286,9 +295,19 @@ struct Implementation final : public Reporter {
   void dispatch_order_update(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<uint64_t> order_id_2;
-    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, order_status;
-    std::vector<std::chrono::nanoseconds> create_time_utc, update_time_utc, sending_time_utc;
-    std::vector<double> quantity, price, remaining_quantity, traded_quantity, average_traded_price;
+    std::vector<std::string_view> exchange_2;
+    std::vector<std::string_view> symbol_2;
+    std::vector<std::string_view> account_2;
+    std::vector<std::string_view> side;
+    std::vector<std::string_view> order_status;
+    std::vector<std::chrono::nanoseconds> create_time_utc;
+    std::vector<std::chrono::nanoseconds> update_time_utc;
+    std::vector<std::chrono::nanoseconds> sending_time_utc;
+    std::vector<double> quantity;
+    std::vector<double> price;
+    std::vector<double> remaining_quantity;
+    std::vector<double> traded_quantity;
+    std::vector<double> average_traded_price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
@@ -335,8 +354,15 @@ struct Implementation final : public Reporter {
   void dispatch_trade_update(Handler &handler) const {
     std::vector<uint8_t> source_2;
     std::vector<uint64_t> order_id;
-    std::vector<std::string_view> exchange_2, symbol_2, account_2, side, external_trade_id, liquidity;
-    std::vector<std::chrono::nanoseconds> exchange_time_utc, create_time_utc, update_time_utc;
+    std::vector<std::string_view> exchange_2;
+    std::vector<std::string_view> symbol_2;
+    std::vector<std::string_view> account_2;
+    std::vector<std::string_view> side;
+    std::vector<std::string_view> external_trade_id;
+    std::vector<std::string_view> liquidity;
+    std::vector<std::chrono::nanoseconds> exchange_time_utc;
+    std::vector<std::chrono::nanoseconds> create_time_utc;
+    std::vector<std::chrono::nanoseconds> update_time_utc;
     std::vector<double> quantity, price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
@@ -626,7 +652,7 @@ struct Implementation final : public Reporter {
 
   void operator()(Event<CustomMetricsUpdate> const &event) override {
     auto &[message_info, custom_metrics_update] = event;
-    if (message_info.receive_time.count()) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
+    if (message_info.receive_time.count() != 0) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
       // check(event);
     }
     // XXX TODO capture
@@ -634,7 +660,7 @@ struct Implementation final : public Reporter {
 
   void operator()(Event<CustomMatrixUpdate> const &event) override {
     auto &[message_info, custom_matrix_update] = event;
-    if (message_info.receive_time.count()) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
+    if (message_info.receive_time.count() != 0) {  // XXX FIXME TODO doesn't yet work with the simulator (because of timing or source being SELF)
       // check(event);
     }
     // XXX TODO capture

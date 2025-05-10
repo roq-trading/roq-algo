@@ -26,7 +26,8 @@ void parse_position(auto &account, auto &node) {
     LONG_POSITION,
     SHORT_POSITION,
   };
-  std::string exchange, symbol;
+  std::string exchange;
+  std::string symbol;
   Position position;
   auto table = node.as_table();
   for (auto &[key, value] : *table) {

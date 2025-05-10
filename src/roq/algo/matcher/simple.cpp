@@ -444,7 +444,7 @@ void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order
 }
 
 void Simple::dispatch_order_update(MessageInfo const &message_info, cache::Order &order) {
-  if (!order.create_time_utc.count()) {
+  if (order.create_time_utc.count() == 0) {
     order.create_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy create time (not exchange time)
   }
   order.update_time_utc = market_data_.exchange_time_utc();  // XXX FIXME TODO this is strategy receive time (not exchange time)

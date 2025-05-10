@@ -558,6 +558,7 @@ void Simple::check(Event<T> const &event) {
 }
 
 // XXX FIXME TODO proper (for now, just testing simulator support)
+// NOLINTBEGIN(readability-magic-numbers)
 void Simple::publish_statistics(Instrument &instrument) {
   auto &top_of_book = instrument.top_of_book();
   std::array<Measurement, 4> measurements{{
@@ -611,6 +612,7 @@ void Simple::publish_statistics(Instrument &instrument) {
   };
   dispatcher_.send(custom_matrix, publish_source_);
 }
+// NOLINTEND(readability-magic-numbers)
 
 }  // namespace arbitrage
 }  // namespace algo
