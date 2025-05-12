@@ -32,14 +32,14 @@ struct OrderCache final : public algo::OrderCache {
 
   template <typename T>
   cache::Order &operator()(T const &value) {
-    if constexpr (std::is_same<T, CreateOrder>::value) {
+    if constexpr (std::is_same_v<T, CreateOrder>) {
       auto iter = orders_.find(value.order_id);
       if (iter != std::end(orders_)) {
         log::fatal("Unexpected"sv);
       }
       iter = orders_.try_emplace(value.order_id, value).first;
       return (*iter).second;
-    } else if constexpr (std::is_same<T, ModifyOrder>::value || std::is_same<T, CancelOrder>::value) {
+    } else if constexpr (std::is_same_v<T, ModifyOrder> || std::is_same_v<T, CancelOrder>) {
       auto iter = orders_.find(value.order_id);
       if (iter == std::end(orders_)) {
         log::fatal("Unexpected"sv);
@@ -315,7 +315,7 @@ struct Helper final {
         .opaque = {},
     };
     Event event{message_info, value};
-    if constexpr (std::is_same<T, CreateOrder>::value || std::is_same<T, ModifyOrder>::value || std::is_same<T, CancelOrder>::value) {
+    if constexpr (std::is_same_v<T, CreateOrder> || std::is_same_v<T, ModifyOrder> || std::is_same_v<T, CancelOrder>) {
       auto &order = state_.order_cache(value);
       state_.matcher(event, order);
     } else {
