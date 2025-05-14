@@ -27,7 +27,7 @@ namespace roq {
 namespace algo {
 namespace reporter {
 
-// NOLINTBEGIN(readability-isolate-declaration)
+// NOLINTBEGIN(readability-isolate-declaration,readability-magic-numbers)
 
 // === CONSTANTS ===
 
@@ -774,7 +774,7 @@ std::unique_ptr<Reporter> Summary::create(Config const &config) {
   return std::make_unique<Implementation>(config);
 }
 
-// NOLINTEND(readability-isolate-declaration)
+// NOLINTEND(readability-isolate-declaration,readability-magic-numbers)
 
 }  // namespace reporter
 }  // namespace algo
