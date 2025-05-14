@@ -69,6 +69,8 @@ std::array<strategy::Meta, 7> const META{{
         .description = "Source (index) used for publishing custom metrics"sv,
     },
 }};
+
+auto const DEFAULT_MAX_AGE = 10s;
 }  // namespace
 
 // === HELPERS ===
@@ -96,7 +98,7 @@ auto parameters_from_string(auto &parameters) {
         utils::variant::parse(result.market_data_source, value);
         break;
       case Key::MAX_AGE:
-        result.max_age = 10s;  // XXX FIXME TODO parse period
+        result.max_age = DEFAULT_MAX_AGE;  // XXX FIXME TODO parse period
         break;
       case Key::THRESHOLD:
         utils::variant::parse(result.threshold, value);

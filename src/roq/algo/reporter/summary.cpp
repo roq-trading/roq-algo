@@ -27,6 +27,8 @@ namespace roq {
 namespace algo {
 namespace reporter {
 
+// NOLINTBEGIN(readability-isolate-declaration)
+
 // === CONSTANTS ===
 
 namespace {
@@ -363,7 +365,8 @@ struct Implementation final : public Reporter {
     std::vector<std::chrono::nanoseconds> exchange_time_utc;
     std::vector<std::chrono::nanoseconds> create_time_utc;
     std::vector<std::chrono::nanoseconds> update_time_utc;
-    std::vector<double> quantity, price;
+    std::vector<double> quantity;
+    std::vector<double> price;
     for (size_t source = 0; source < std::size(instruments_); ++source) {
       auto &tmp_1 = instruments_[source];
       for (auto &[exchange, tmp_2] : tmp_1) {
@@ -712,7 +715,7 @@ struct Implementation final : public Reporter {
           .unrealized_profit = unrealized_profit,
           .realized_profit = realized_profit,
       };
-      instrument.history.emplace_back(sample_period_utc_, std::move(sample));
+      instrument.history.emplace_back(sample_period_utc_, sample);
     } else {
       auto &sample = instrument.history[std::size(instrument.history) - 1].second;
       new (&sample) Instrument::Sample{
@@ -770,6 +773,8 @@ std::unique_ptr<Reporter> Summary::create() {
 std::unique_ptr<Reporter> Summary::create(Config const &config) {
   return std::make_unique<Implementation>(config);
 }
+
+// NOLINTEND(readability-isolate-declaration)
 
 }  // namespace reporter
 }  // namespace algo
