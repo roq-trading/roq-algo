@@ -34,7 +34,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
       .symbol = "BTC-PERPETUAL"sv,
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
   };
-  for (auto _ : state) {
+  for (auto _ : state) {  // NOLINT(clang-analyzer-deadcode.DeadStores)
     auto matcher = Factory::create(Type::SIMPLE, dispatcher, order_cache, config);
   }
 }

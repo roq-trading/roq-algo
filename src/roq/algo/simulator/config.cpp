@@ -16,6 +16,8 @@ namespace roq {
 namespace algo {
 namespace simulator {
 
+// NOLINTBEGIN(bugprone-unchecked-optional-access)
+
 // === HELPERS ===
 
 namespace {
@@ -137,6 +139,8 @@ Config Config::parse_text(std::string_view const &text) {
   auto root = toml::parse(text);
   return parse_helper(root);
 }
+
+// NOLINTEND(bugprone-unchecked-optional-access)
 
 }  // namespace simulator
 }  // namespace algo

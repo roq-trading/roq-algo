@@ -52,7 +52,7 @@ void add_order_helper(auto &container, auto &&order, auto compare) {
     }
     container.insert(iter, order);
   } else {
-    container.emplace_back(std::move(order));
+    container.emplace_back(order);
   }
 }
 
@@ -323,7 +323,7 @@ void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) 
 void QueuePositionSimple::match_resting_orders_2(Event<TradeSummary> const &event) {
   auto &[message_info, trade_summary] = event;
   assert(!std::empty(trade_summary.trades));
-  auto helper = [&](auto price, auto total_quantity) {
+  auto helper = [&]([[maybe_unused]] auto price, [[maybe_unused]] auto total_quantity) {
     // HANS XXX TODO
     // like try_match with matched_order callback (reuse)
     // remember -- fills happen (mostly) near top of book
@@ -448,7 +448,7 @@ bool QueuePositionSimple::is_aggressive(Side side, int64_t price) const {
 }
 
 void QueuePositionSimple::add_order(uint64_t order_id, Side side, int64_t price) {
-  auto quantity = market_data_.total_quantity(side, price);
+  auto quantity = market_data_.total_quantity(side, price);  // XXX FIXME TODO convert internal price to external
   auto order = Order{
       .order_id = order_id,
       .price = price,
