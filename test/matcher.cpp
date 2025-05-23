@@ -25,6 +25,8 @@ auto const SYMBOL = "BTC-PERPETUAL"sv;
 
 // === HELPERS ===
 
+// NOLINTBEGIN(performance-unnecessary-value-param)
+
 namespace {
 struct OrderCache final : public algo::OrderCache {
   void operator=(OrderCache &&) = delete;
@@ -331,6 +333,8 @@ struct Helper final {
   State2 &state_;
 };
 }  // namespace
+
+// NOLINTEND(performance-unnecessary-value-param)
 
 // === IMPLEMENTATION ===
 

@@ -28,6 +28,8 @@ std::tuple<double, double, double> PositionTracker::compute_pnl(double mark_pric
   };
 }
 
+// XXX FIXME TODO
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 void PositionTracker::operator()(Event<TradeUpdate> const &event) {
   auto &[message_info, trade_update] = event;
   switch (trade_update.update_type) {
@@ -82,6 +84,7 @@ void PositionTracker::operator()(Event<TradeUpdate> const &event) {
       break;
   }
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 // XXX FIXME TODO simulator doesn't emit snapshot ???
 void PositionTracker::operator()(Event<PositionUpdate> const &event) {

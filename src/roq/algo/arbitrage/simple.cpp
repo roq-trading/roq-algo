@@ -263,6 +263,8 @@ void Simple::operator()(Event<OrderAck> const &event, cache::Order const &) {
   }
 }
 
+// XXX FIXME TODO
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
   check(event);
   if (is_mine(event)) {
@@ -322,6 +324,7 @@ void Simple::operator()(Event<OrderUpdate> const &event, cache::Order const &) {
     get_account_and_instrument(event, callback);
   }
 }
+// NOLINTEND(readability-function-cognitive-complexity)
 
 void Simple::operator()(Event<TradeUpdate> const &event, cache::Order const &) {
   check(event);
