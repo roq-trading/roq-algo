@@ -189,7 +189,7 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
           .quote_amount = NaN,
           .commission_amount = NaN,
           .commission_currency = {},
-          .profit_loss_amount = NaN,
+          .profit_loss_cost_amount = NaN,
       };
       order.create_time_utc = market_data_.exchange_time_utc();
       order.update_time_utc = market_data_.exchange_time_utc();
@@ -278,7 +278,7 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
           .quote_amount = NaN,
           .commission_amount = NaN,
           .commission_currency = {},
-          .profit_loss_amount = NaN,
+          .profit_loss_cost_amount = NaN,
       };
       order.update_time_utc = market_data_.exchange_time_utc();
       order.order_status = OrderStatus::COMPLETED;
@@ -371,7 +371,7 @@ void Simple::match_resting_orders(MessageInfo const &message_info) {
         .quote_amount = NaN,
         .commission_amount = NaN,
         .commission_currency = {},
-        .profit_loss_amount = NaN,
+        .profit_loss_cost_amount = NaN,
     };
     order.update_time_utc = market_data_.exchange_time_utc();
     order.order_status = OrderStatus::COMPLETED;
