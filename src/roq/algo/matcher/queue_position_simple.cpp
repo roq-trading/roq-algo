@@ -199,7 +199,7 @@ void QueuePositionSimple::operator()(Event<CreateOrder> const &event, cache::Ord
           .quote_amount = NaN,
           .commission_amount = NaN,
           .commission_currency = {},
-          .profit_loss_cost_amount = NaN,
+          .profit_loss_amount = NaN,
       };
       order.create_time_utc = market_data_.exchange_time_utc();
       order.update_time_utc = market_data_.exchange_time_utc();
@@ -297,7 +297,7 @@ void QueuePositionSimple::match_resting_orders(MessageInfo const &message_info) 
         .quote_amount = NaN,
         .commission_amount = NaN,
         .commission_currency = {},
-        .profit_loss_cost_amount = NaN,
+        .profit_loss_amount = NaN,
     };
     order.update_time_utc = market_data_.exchange_time_utc();
     order.order_status = OrderStatus::COMPLETED;
