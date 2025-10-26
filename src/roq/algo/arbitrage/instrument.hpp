@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "roq/compat/fmt.hpp"
-
 #include <fmt/format.h>
 
 #include <magic_enum/magic_enum_format.hpp>
