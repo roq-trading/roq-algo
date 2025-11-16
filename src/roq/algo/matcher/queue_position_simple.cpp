@@ -390,6 +390,7 @@ void QueuePositionSimple::dispatch_order_ack(Event<T> const &event, cache::Order
       .quantity = order.quantity,
       .price = order.price,
       .stop_price = order.stop_price,
+      .leverage = order.leverage,
       .routing_id = {},
       .version = utils::get_version(value),
       .risk_exposure = NaN,

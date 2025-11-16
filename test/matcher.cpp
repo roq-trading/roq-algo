@@ -264,6 +264,7 @@ struct Helper final {
         .quantity = quantity,
         .price = price,
         .stop_price = NaN,
+        .leverage = NaN,
         .routing_id = {},
         .strategy_id = {},
     };

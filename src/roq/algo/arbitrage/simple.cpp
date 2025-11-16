@@ -502,6 +502,7 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
         .quantity = quantity,
         .price = price,
         .stop_price = NaN,
+        .leverage = NaN,
         .routing_id = {},
         .strategy_id = strategy_id_,
     };
