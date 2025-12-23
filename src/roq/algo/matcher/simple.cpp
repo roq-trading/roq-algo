@@ -234,7 +234,7 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
     if (has_no_effect()) {
       return Error::MODIFY_HAS_NO_EFFECT;
     }
-    if (!std::isnan(modify_order.quantity)) {  // for now, only support price change
+    if (!std::isnan(modify_order.quantity) && utils::compare(modify_order.quantity, order.quantity) != 0) {  // for now, only support price change
       return Error::NOT_SUPPORTED;
     }
     return {};
