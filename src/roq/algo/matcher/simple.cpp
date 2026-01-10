@@ -242,62 +242,70 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
   if (auto error = validate(); error != Error{}) {
     dispatch_order_ack(event, order, error);
   } else {
-    auto [price_0, overflow_0] = market_data_.price_to_ticks(order.price);
-    if (overflow_0) [[unlikely]] {
-      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
-    }
-    auto [price_1, overflow_1] = market_data_.price_to_ticks(modify_order.price);
-    if (overflow_1) [[unlikely]] {
-      log::fatal("Unexpected: overflow when converting price to internal representation"sv);
-    }
-    if (!remove_order(order.order_id, order.side, price_0)) {
-      log::fatal("Unexpected: internal error"sv);
-    }
-    // FIXME TODO align with CreateOrder
-    if (is_aggressive(order.side, price_1)) {
-      auto matched_price = [&]() -> double {
-        switch (order.side) {
-          using enum Side;
-          [[unlikely]] case UNDEFINED:
-            break;
-          case BUY:
-            return top_of_book_.external.second;
-          case SELL:
-            return top_of_book_.external.first;
-        }
-        log::fatal("Unexpected"sv);
-      }();
-      auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
-      auto fill = Fill{
-          .exchange_time_utc = market_data_.exchange_time_utc(),
-          .external_trade_id = external_trade_id,
-          .quantity = order.quantity,
-          .price = matched_price,
-          .liquidity = Liquidity::TAKER,
-          .commission_amount = NaN,
-          .commission_currency = {},
-          .base_amount = NaN,
-          .quote_amount = NaN,
-          .profit_loss_amount = NaN,
-      };
-      order.update_time_utc = market_data_.exchange_time_utc();
-      order.order_status = OrderStatus::COMPLETED;
-      order.remaining_quantity = 0.0;
-      order.traded_quantity = fill.quantity;
-      order.average_traded_price = fill.price;
-      order.last_traded_quantity = fill.quantity;
-      order.last_traded_price = fill.price;
-      order.last_liquidity = fill.liquidity;
-      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-      dispatch_order_update(message_info, order);
-      dispatch_trade_update(message_info, order, fill);
-    } else {
-      add_order(order.order_id, order.side, price_1);
+    if (std::isnan(modify_order.price)) {
+      // simple, just ack + update
       order.update_time_utc = market_data_.exchange_time_utc();
       utils::update(order.quantity, modify_order.quantity);
-      utils::update(order.price, modify_order.price);
       dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
       dispatch_order_update(message_info, order);
+    } else {
+      auto [price_0, overflow_0] = market_data_.price_to_ticks(order.price);
+      if (overflow_0) [[unlikely]] {
+        log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+      }
+      auto [price_1, overflow_1] = market_data_.price_to_ticks(modify_order.price);
+      if (overflow_1) [[unlikely]] {
+        log::fatal("Unexpected: overflow when converting price to internal representation"sv);
+      }
+      if (!remove_order(order.order_id, order.side, price_0)) {
+        log::fatal("Unexpected: internal error"sv);
+      }
+      // FIXME TODO align with CreateOrder
+      if (is_aggressive(order.side, price_1)) {
+        auto matched_price = [&]() -> double {
+          switch (order.side) {
+            using enum Side;
+            [[unlikely]] case UNDEFINED:
+              break;
+            case BUY:
+              return top_of_book_.external.second;
+            case SELL:
+              return top_of_book_.external.first;
+          }
+          log::fatal("Unexpected"sv);
+        }();
+        auto external_trade_id = fmt::format("trd-{}"sv, order_cache_.get_next_trade_id());
+        auto fill = Fill{
+            .exchange_time_utc = market_data_.exchange_time_utc(),
+            .external_trade_id = external_trade_id,
+            .quantity = order.quantity,
+            .price = matched_price,
+            .liquidity = Liquidity::TAKER,
+            .commission_amount = NaN,
+            .commission_currency = {},
+            .base_amount = NaN,
+            .quote_amount = NaN,
+            .profit_loss_amount = NaN,
+        };
+        order.update_time_utc = market_data_.exchange_time_utc();
+        order.order_status = OrderStatus::COMPLETED;
+        order.remaining_quantity = 0.0;
+        order.traded_quantity = fill.quantity;
+        order.average_traded_price = fill.price;
+        order.last_traded_quantity = fill.quantity;
+        order.last_traded_price = fill.price;
+        order.last_liquidity = fill.liquidity;
+        dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+        dispatch_order_update(message_info, order);
+        dispatch_trade_update(message_info, order, fill);
+      } else {
+        add_order(order.order_id, order.side, price_1);
+        order.update_time_utc = market_data_.exchange_time_utc();
+        utils::update(order.quantity, modify_order.quantity);
+        utils::update(order.price, modify_order.price);
+        dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+        dispatch_order_update(message_info, order);
+      }
     }
   }
 }
