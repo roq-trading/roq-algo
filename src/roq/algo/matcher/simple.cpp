@@ -221,10 +221,12 @@ void Simple::operator()(Event<CreateOrder> const &event, cache::Order &order) {
 void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
   check(event);
   auto &[message_info, modify_order] = event;
+  auto has_price = !std::isnan(modify_order.price);
+  auto has_quantity = !std::isnan(modify_order.quantity);
   auto has_no_effect = [&]() -> bool {
     auto change = false;
-    change |= !std::isnan(modify_order.quantity) && utils::compare(modify_order.quantity, order.quantity) != 0;
-    change |= !std::isnan(modify_order.price) && utils::compare(modify_order.price, order.price) != 0;
+    change |= has_quantity && utils::compare(modify_order.quantity, order.quantity) != 0;
+    change |= has_price && utils::compare(modify_order.price, order.price) != 0;
     return !change;
   };
   auto validate = [&]() -> Error {
@@ -234,21 +236,12 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
     if (has_no_effect()) {
       return Error::MODIFY_HAS_NO_EFFECT;
     }
-    if (std::isnan(modify_order.price)) {
-      return Error::NOT_SUPPORTED;
-    }
     return {};
   };
   if (auto error = validate(); error != Error{}) {
     dispatch_order_ack(event, order, error);
   } else {
-    if (std::isnan(modify_order.price)) {
-      // simple, just ack + update
-      order.update_time_utc = market_data_.exchange_time_utc();
-      utils::update(order.quantity, modify_order.quantity);
-      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
-      dispatch_order_update(message_info, order);
-    } else {
+    if (has_price) {
       auto [price_0, overflow_0] = market_data_.price_to_ticks(order.price);
       if (overflow_0) [[unlikely]] {
         log::fatal("Unexpected: overflow when converting price to internal representation"sv);
@@ -306,6 +299,14 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
         dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
         dispatch_order_update(message_info, order);
       }
+    } else {
+      if (!has_quantity) {
+        log::fatal("Unexpected: internal error"sv);  // note! should already be caught by no-effect
+      }
+      order.update_time_utc = market_data_.exchange_time_utc();
+      utils::update(order.quantity, modify_order.quantity);
+      dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
+      dispatch_order_update(message_info, order);
     }
   }
 }
