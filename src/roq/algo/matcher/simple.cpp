@@ -296,6 +296,7 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
         order.update_time_utc = market_data_.exchange_time_utc();
         utils::update(order.quantity, modify_order.quantity);
         utils::update(order.price, modify_order.price);
+        utils::update(order.remaining_quantity, modify_order.quantity);
         dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
         dispatch_order_update(message_info, order);
       }
@@ -305,6 +306,7 @@ void Simple::operator()(Event<ModifyOrder> const &event, cache::Order &order) {
       }
       order.update_time_utc = market_data_.exchange_time_utc();
       utils::update(order.quantity, modify_order.quantity);
+      utils::update(order.remaining_quantity, modify_order.quantity);
       dispatch_order_ack(event, order, {}, RequestStatus::ACCEPTED);
       dispatch_order_update(message_info, order);
     }
