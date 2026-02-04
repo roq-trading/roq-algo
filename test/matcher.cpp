@@ -197,6 +197,7 @@ struct Helper final {
         .symbol = state_.symbol,
         .description = {},
         .security_type = {},
+        .external_security_id = {},
         .cfi_code = {},
         .base_currency = {},
         .quote_currency = {},
