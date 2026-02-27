@@ -21,6 +21,7 @@ requirements:
     - make
     - pkg-config
   host:
+    - benchmark
     - catch2
     - fmt
     - magic_enum
@@ -30,11 +31,12 @@ requirements:
     - roq-fix
     - roq-logging
     - roq-market
-    - benchmark
     - roq-oss-nameof
     - roq-oss-tomlplusplus
     - roq-oss-unordered_dense
     - roq-utils
+  run:
+    - benchmark
 
 about:
   home: https://roq-trading.com
