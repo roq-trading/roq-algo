@@ -268,6 +268,7 @@ struct Helper final {
         .leverage = NaN,
         .routing_id = {},
         .strategy_id = {},
+        .release_time_utc = {},
     };
     dispatch(create_order);
     return create_order.order_id;
@@ -283,6 +284,7 @@ struct Helper final {
         .routing_id = {},
         .version = {},
         .conditional_on_version = {},
+        .release_time_utc = {},
     };
     dispatch(modify_order);
   };
@@ -295,6 +297,7 @@ struct Helper final {
         .routing_id = {},
         .version = {},
         .conditional_on_version = {},
+        .release_time_utc = {},
     };
     dispatch(cancel_order);
   };

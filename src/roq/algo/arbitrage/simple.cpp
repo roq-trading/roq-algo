@@ -505,6 +505,7 @@ void Simple::maybe_trade_spread(MessageInfo const &, Side side, Instrument &lhs,
         .leverage = NaN,
         .routing_id = {},
         .strategy_id = strategy_id_,
+        .release_time_utc = {},
     };
     log::debug("[{}] create_order={}"sv, instrument.source, create_order);
     try {
