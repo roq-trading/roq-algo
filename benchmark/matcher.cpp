@@ -29,7 +29,7 @@ void BM_tools_Simple_add(benchmark::State &state) {
     cache::Order *get_order_helper([[maybe_unused]] uint64_t order_id) override { return nullptr; }
     uint64_t get_next_trade_id() override { return {}; }
   } order_cache;
-  auto config = Config{
+  auto config = matcher::Config{
       .exchange = "deribit"sv,
       .symbol = "BTC-PERPETUAL"sv,
       .market_data_source = algo::MarketDataSource::TOP_OF_BOOK,
