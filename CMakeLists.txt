@@ -72,7 +72,8 @@ install(
   DIRECTORY ${CMAKE_SOURCE_DIR}/include/roq/
   DESTINATION include/roq
   FILES_MATCHING
-  PATTERN "*.hpp")
+  PATTERN "*.hpp"
+  PATTERN "CMakeFiles" EXCLUDE)
 
 # doxygen
 
