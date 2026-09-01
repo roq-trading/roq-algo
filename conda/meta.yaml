@@ -15,14 +15,13 @@ requirements:
   build:
     - {{ compiler('cxx') }}
     - cmake
-    - coreutils                                                                                                                                                    
+    - coreutils
     - doxygen
     - git
     - make
     - pkg-config
   host:
-    - benchmark
-    - catch2
+    - catch2  # [osx]
     - fmt
     - magic_enum
     - roq-api
@@ -31,12 +30,12 @@ requirements:
     - roq-fix
     - roq-logging
     - roq-market
+    - roq-oss-benchmark
+    - roq-oss-catch2  # [linux]
     - roq-oss-nameof
     - roq-utils
     - tomlplusplus
     - unordered_dense
-  run:
-    - benchmark
 
 about:
   home: https://roq-trading.com
