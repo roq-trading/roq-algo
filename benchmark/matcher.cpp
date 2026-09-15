@@ -12,6 +12,7 @@ using namespace roq::algo::matcher;
 
 void BM_tools_Simple_add(benchmark::State &state) {
   struct MyDispatcher final : public Matcher::Dispatcher {
+    void operator()(Event<MarketSegmentStatus> const &) override {}
     void operator()(Event<ReferenceData> const &) override {}
     void operator()(Event<MarketStatus> const &) override {}
     void operator()(Event<TopOfBook> const &) override {}

@@ -102,6 +102,11 @@ bool MarketData::operator()(Event<MarketStatus> const &event) {
   return market_status_(event);
 }
 
+bool MarketData::operator()(Event<MarketSegmentStatus> const &event) {
+  update_exchange_time_utc(exchange_time_utc_, event);
+  return false;  // XXX FIXME TODO apply to "something"
+}
+
 bool MarketData::operator()(Event<TopOfBook> const &event) {
   update_exchange_time_utc(exchange_time_utc_, event);
   if (!top_of_book_(event)) {

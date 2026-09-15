@@ -31,6 +31,7 @@ struct QueuePositionSimple final : public Matcher {
  protected:
   void operator()(Event<ReferenceData> const &) override;
   void operator()(Event<MarketStatus> const &) override;
+  void operator()(Event<MarketSegmentStatus> const &) override;
 
   void operator()(Event<TopOfBook> const &) override;
   void operator()(Event<MarketByPriceUpdate> const &) override;

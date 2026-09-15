@@ -11,6 +11,7 @@
 #include <memory>
 #include <string_view>
 
+#include "roq/market_segment_status.hpp"
 #include "roq/reference_data.hpp"
 #include "roq/statistics_update.hpp"
 #include "roq/top_of_book.hpp"
@@ -55,6 +56,7 @@ struct ROQ_PUBLIC MarketData final {
 
   bool operator()(Event<ReferenceData> const &);
   bool operator()(Event<MarketStatus> const &);
+  bool operator()(Event<MarketSegmentStatus> const &);
 
   // note! depends on MarketDataSource
   bool operator()(Event<TopOfBook> const &);

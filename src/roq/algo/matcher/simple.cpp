@@ -98,6 +98,12 @@ void Simple::operator()(Event<MarketStatus> const &event) {
   market_data_(event);
 }
 
+void Simple::operator()(Event<MarketSegmentStatus> const &event) {
+  check(event);
+  dispatcher_(event);  // note!
+  market_data_(event);
+}
+
 void Simple::operator()(Event<TopOfBook> const &event) {
   check(event);
   dispatcher_(event);  // note!

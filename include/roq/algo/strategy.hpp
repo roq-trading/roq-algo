@@ -67,6 +67,7 @@ struct ROQ_PUBLIC Strategy {
   // market data
   virtual void operator()(Event<ReferenceData> const &) {}
   virtual void operator()(Event<MarketStatus> const &) {}
+  virtual void operator()(Event<MarketSegmentStatus> const &) {}
   virtual void operator()(Event<TopOfBook> const &) {}
   virtual void operator()(Event<MarketByPriceUpdate> const &) {}
   virtual void operator()(Event<MarketByOrderUpdate> const &) {}

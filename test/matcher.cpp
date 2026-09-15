@@ -117,6 +117,7 @@ struct Dispatcher final : public algo::Matcher::Dispatcher {
  protected:
   void operator()(Event<ReferenceData> const &) override {}
   void operator()(Event<MarketStatus> const &) override {}
+  void operator()(Event<MarketSegmentStatus> const &) override {}
   void operator()(Event<TopOfBook> const &) override {}
   void operator()(Event<MarketByPriceUpdate> const &) override {}
   void operator()(Event<MarketByOrderUpdate> const &) override {}
@@ -198,6 +199,7 @@ struct Helper final {
         .description = {},
         .security_type = {},
         .external_security_id = {},
+        .market_segment = {},
         .cfi_code = {},
         .base_currency = {},
         .quote_currency = {},

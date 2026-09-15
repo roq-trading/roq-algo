@@ -15,6 +15,7 @@ struct ROQ_PUBLIC Matcher {
   struct ROQ_PUBLIC Dispatcher {
     virtual void operator()(Event<ReferenceData> const &) = 0;
     virtual void operator()(Event<MarketStatus> const &) = 0;
+    virtual void operator()(Event<MarketSegmentStatus> const &) = 0;
 
     virtual void operator()(Event<TopOfBook> const &) = 0;
     virtual void operator()(Event<MarketByPriceUpdate> const &) = 0;
@@ -34,6 +35,7 @@ struct ROQ_PUBLIC Matcher {
 
   virtual void operator()(Event<ReferenceData> const &) = 0;
   virtual void operator()(Event<MarketStatus> const &) = 0;
+  virtual void operator()(Event<MarketSegmentStatus> const &) = 0;
 
   virtual void operator()(Event<TopOfBook> const &) = 0;
   virtual void operator()(Event<MarketByPriceUpdate> const &) = 0;
