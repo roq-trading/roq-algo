@@ -263,6 +263,7 @@ struct Helper final {
         .order_type = order_type,
         .time_in_force = time_in_force,
         .execution_instructions = {},
+        .execution_destination = {},
         .request_template = {},
         .quantity = quantity,
         .price = price,
