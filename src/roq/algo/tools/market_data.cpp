@@ -33,8 +33,9 @@ auto create_market_by_order(auto &exchange, auto &symbol) {
 
 template <typename T>
 void update_exchange_time_utc(auto &result, Event<T> const &event) {
+  auto &[message_info, value] = event;
   // note! we use max because market data could arrive out of sequence (different sources, streams, etc.)
-  utils::update_max(result, event.value.exchange_time_utc);
+  utils::update_max(result, value.exchange_time_utc);
 }
 }  // namespace
 
@@ -83,7 +84,7 @@ bool MarketData::operator()(Event<ReferenceData> const &event) {
   (*market_by_price_)(event);
   (*market_by_order_)(event);
   auto result = false;
-  if (utils::update(tick_size_, event.value.tick_size)) {
+  if (utils::update(tick_size_, reference_data.tick_size)) {
     result = true;
     auto precision = market::increment_to_precision(tick_size_);
     if (static_cast<std::underlying_type_t<decltype(precision)>>(precision) < static_cast<std::underlying_type_t<decltype(precision_)>>(precision_)) {

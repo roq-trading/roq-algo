@@ -124,24 +124,27 @@ struct Dispatcher final : public algo::Matcher::Dispatcher {
   void operator()(Event<TradeSummary> const &) override {}
   void operator()(Event<StatisticsUpdate> const &) override {}
   void operator()(Event<OrderAck> const &event) override {
+    auto &[message_info, order_ack] = event;
     if (order_ack_) {
-      order_ack_(event.value);
+      order_ack_(order_ack);
       order_ack_ = {};
     } else {
       log::error("UNEXPECTED: order_ack"sv);
     }
   }
   void operator()(Event<OrderUpdate> const &event) override {
+    auto &[message_info, order_update] = event;
     if (order_update_) {
-      order_update_(event.value);
+      order_update_(order_update);
       order_update_ = {};
     } else {
       log::error("UNEXPECTED: order_update"sv);
     }
   }
   void operator()(Event<TradeUpdate> const &event) override {
+    auto &[message_info, trade_update] = event;
     if (trade_update_) {
-      trade_update_(event.value);
+      trade_update_(trade_update);
       trade_update_ = {};
     } else {
       log::error("UNEXPECTED: trade_update"sv);
