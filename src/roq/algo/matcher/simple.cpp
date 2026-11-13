@@ -449,6 +449,7 @@ void Simple::dispatch_order_ack(Event<T> const &event, cache::Order const &order
       .error = error,
       .text = get_text(),
       .request_id = {},
+      .external_trace_id = {},
       .external_account = {},
       .external_order_id = {},
       .client_order_id = {},
